@@ -1,6 +1,6 @@
 [versions]
 revanced-patcher = "19.3.1"
-smali = "3.0.5"
+smali = "3.0.9"
 gson = "2.10.1"
 kotlin = "1.9.23"
 

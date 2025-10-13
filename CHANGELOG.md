@@ -1,3 +1,15 @@
+# [1.5.0](https://github.com/andronedev/revanced-patches/compare/v1.4.3...v1.5.0) (2025-10-13)
+
+
+### Bug Fixes
+
+* **notewise:** Simplify description for Pro Features Unlock patch ([b51f8ab](https://github.com/andronedev/revanced-patches/commit/b51f8ab5eb33fb519334b29fbded7872a004c5f5))
+
+
+### Features
+
+* **notewise:** Add `IsUnlimitedFingerprint` and `NotewiseUnlockPatch` for pro features unlock ([2f3698c](https://github.com/andronedev/revanced-patches/commit/2f3698cf0821333782ba89342f42d8cbbecd0880))
+
 ## [1.4.3](https://github.com/andronedev/revanced-patches/compare/v1.4.2...v1.4.3) (2024-05-22)
 
 

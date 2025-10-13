@@ -1,3 +1,10 @@
+## [1.5.1](https://github.com/andronedev/revanced-patches/compare/v1.5.0...v1.5.1) (2025-10-13)
+
+
+### Bug Fixes
+
+* Remove duplicate entry for gradle.properties in .gitignore ([9400870](https://github.com/andronedev/revanced-patches/commit/9400870bdebc390ee1905b0d98b8cf84e66ca5df))
+
 # [1.5.0](https://github.com/andronedev/revanced-patches/compare/v1.4.3...v1.5.0) (2025-10-13)
 
 

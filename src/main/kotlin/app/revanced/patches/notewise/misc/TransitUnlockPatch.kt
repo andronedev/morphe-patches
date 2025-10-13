@@ -9,7 +9,7 @@ import app.revanced.patches.notewise.misc.fingerprints.IsUnlimitedFingerprint
 
 @Patch(
     name = "Pro Features Unlock",
-    description = "Unlock all pro features in Notewise by forcing unlimited entitlement to always be active.",
+    description = "Unlock all pro features in Notewise",
     compatiblePackages = [
         CompatiblePackage("com.yygg.note.app"),
     ],

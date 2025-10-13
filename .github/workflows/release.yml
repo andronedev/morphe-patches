@@ -7,7 +7,11 @@ on:
       - main
       - dev
 
-concurrency: # Limit to one concurrent release job
+permissions:
+  contents: write
+  packages: write
+
+concurrency:
   group: release
   cancel-in-progress: true
 
@@ -50,5 +54,6 @@ jobs:
 
       - name: Release
         env:
-          GITHUB_TOKEN: ${{ secrets.REPOSITORY_PUSH_ACCESS }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm exec semantic-release
+

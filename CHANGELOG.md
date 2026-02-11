@@ -1,3 +1,5 @@
+# 1.0.0 (2026-02-11)
+
 # [1.12.0](https://github.com/MorpheApp/morphe-patches/compare/v1.11.0...v1.12.0) (2026-02-07)
 
 

@@ -1,5 +1,5 @@
 {
-  "version": "1.12.0",
+  "version": "1.0.0",
   "patches": [
     {
       "name": "Pro Features Unlock",
@@ -7,7 +7,7 @@
       "use": true,
       "dependencies": [],
       "compatiblePackages": {
-        "com.thetransitapp.droid": []
+        "com.thetransitapp.droid": null
       },
       "options": []
     }

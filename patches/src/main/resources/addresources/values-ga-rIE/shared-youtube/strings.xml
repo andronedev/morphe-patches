@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared with YouTube and YT Music -->
+<!--
+    Strings with new lines must be raw strings where they're wrapped in quotes and new lines are not encoded.
+    Raw strings still requires escaping embedded double quotes but escaping embedded single quotes is optional.
+
+    Raw strings are required because Crowdin AI translations regularly gets confused and
+    replace \n with an encoded new line character.
+
+    Bad:
+        <string name="summary_key">First \'item\' text\nSecond \"item\" text</string>
+
+    Good:
+        <string name="summary_key">"First 'item' text
+Second \"item\" text"</string>
+
+-->
+<resources>
+  <!-- layout.branding.baseCustomBrandingPatch -->
+  <string name="morphe_custom_branding_name_title">Ainm an aip</string>
+  <!-- Translations of this should be identical to morphe_custom_branding_icon_entry_5 -->
+  <string name="morphe_custom_branding_name_entry_5">Saincheaptha</string>
+  <string name="morphe_custom_branding_icon_title">Deilbhín aip</string>
+  <string name="morphe_custom_branding_icon_entry_1">Bunaidh</string>
+  <string name="morphe_custom_branding_icon_entry_2">Morphe Gorm</string>
+  <string name="morphe_custom_branding_icon_entry_3">Morphe dorcha</string>
+  <string name="morphe_custom_branding_icon_entry_4">Morphe Lacht</string>
+  <!-- Translations of this should be identical to morphe_custom_branding_name_entry_5 -->
+  <string name="morphe_custom_branding_icon_entry_5">Saincheaptha</string>
+  <!-- If any of these experimental strings are changed then also change the hard coded values in the patch for Reddit -->
+  <!-- misc.checks.experimentalAppNoticePatch -->
+  <string name="morphe_experimental_app_version_dialog_title">🚨 Taispeántas Alartha! 🚨</string>
+  <string name="morphe_experimental_app_version_dialog_message">"Tá tú ag úsáid ar chóip tarsna tairbhe experimental den ⚠️ &lt;b&gt;%1$s&lt;/b&gt;
+&lt;br/&gt;&lt;br/&gt;
+🔧 Tá tairbheanna tairbheacha ag tarlú nó buganna neamhfhios agam mar táimid ag déanamh leathanna do chóip seo.
+&lt;br/&gt;&lt;br/&gt;
+Má tá tú ag iarraidh an tairbhe is fearr, déan &lt;b&gt;de réir na tairbheanna&lt;/b&gt; seo agus cóipeáil an chóip tairbheach &lt;b&gt;%2$s&lt;/b&gt;."</string>
+  <string name="morphe_experimental_app_version_dialog_confirm">⚠️ Tá mé ag iarraidh tairbheanna tairbheacha</string>
+  <string name="morphe_experimental_app_version_dialog_open_homepage">✅ Tá mé ag iarraidh tairbheanna tairbheacha</string>
+  <!-- misc.dns.checkWatchHistoryDomainNameResolutionPatch -->
+  <string name="morphe_check_watch_history_domain_name_dialog_title">Fógra Morphe</string>
+  <string name="morphe_check_watch_history_domain_name_dialog_message">Níl do stair faire á sábháil.&lt;br&gt;&lt;br&gt;Is é is dóichí gur seachfhreastalaí fógraí DNS nó seachfhreastalaí líonra is cúis leis seo.&lt;br&gt;&lt;br&gt; Chun é seo a réiteach, déan liosta bán &lt;b&gt;s.youtube.com&lt;/b&gt; nó gach seachfhreastalaí DNS a mhúchadh.</string>
+  <string name="morphe_check_watch_history_domain_name_dialog_ignore">Ná taispeáin arís</string>
+  <!-- misc.fix.playback.spoofVideoStreamsPatch -->
+  <string name="morphe_spoof_video_streams_screen_title">Sruthanna físe bréige</string>
+  <string name="morphe_spoof_video_streams_screen_summary">Déan sruthanna físe an chliaint a fhalsú chun fadhbanna athsheinm a chosc</string>
+  <string name="morphe_spoof_video_streams_title">Sruthanna físe bréige</string>
+  <string name="morphe_spoof_video_streams_summary_on">"Déantar sruthanna físe a bhréagnú
+
+Mura bhfuil tú i d’úsáideoir YouTube Premium, b’fhéidir nach mbeidh an socrú seo ag teastáil"</string>
+  <string name="morphe_spoof_video_streams_summary_off">"Ní dhéantar sruthanna físeáin a bhréagnú
+
+Seans nach n-oibreoidh an t-athsheinm"</string>
+  <string name="morphe_spoof_video_streams_no_clients_toast">Níorbh fhéidir aon sruthanna cliant a fháil</string>
+  <string name="morphe_spoof_video_streams_user_dialog_message">Má mhúchann tú an socrú seo, d\'fhéadfadh saincheisteanna athsheinm a theacht chun cinn.</string>
+  <!-- "Spoof video streams" must use the same translation as morphe_spoof_video_streams_title.
+         "Sign in to Android VR" must use the same translation as morphe_spoof_video_streams_sign_in_android_vr_about_title -->
+  <string name="morphe_spoof_video_streams_no_clients_suggest_vr_toast">Bain triail as na nithe seo a leanas a chumasú: Sruthanna físe bréige &gt; Sínigh isteach Android VR</string>
+  <string name="morphe_spoof_video_streams_client_type_title">Cliant réamhshocraithe</string>
+  <!-- Ensure this translation matches the translation of morphe_spoof_video_streams_no_clients_suggest_vr_toast -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_title">Logáil isteach Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary">Níl tú logáilte isteach in Android VR. Tapáil anseo le logáil isteach.</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary_signed_in">Sínithe isteach i Android VR faoi láthair</string>
+  <!-- "Default client" must be the same translated text as morphe_spoof_video_streams_client_type_title -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary_disabled">Chun an ghné seo a úsáid, athraigh \'Cliant réamhshocraithe\' go Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_title">Sínigh isteach chuig Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_not_signed_in_message">"Is féidir le síniú isteach in Android VR fadhbanna athsheinm a réiteach do roinnt úsáideoirí
+
+Chun síniú isteach, brúigh lean ar aghaidh thíos"</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_continue">Lean ar aghaidh</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_reset">Sínigh amach</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_title">Treoracha</string>
+  <!-- "Open website" must use the same translation as morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_open_website -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_message">"Cód gníomhachtaithe: %s
+
+1. Tapáil 'Oscail suíomh Gréasáin' thíos chun an suíomh Gréasáin 'Ceangail gléas' a oscailt
+2. Greamaigh ón ngearrthaisce (nó clóscríobh amach) an cód gníomhachtaithe a thaispeántar thuas
+3. Sínigh isteach i Google má iarrtar ort é. Má tá cuntais iolracha agat, roghnaigh an cuntas YouTube seo
+4. Tapáil 'Ceadaigh rochtain YouTube VR'
+5. Fill ar an aip seo tar éis duit an teachtaireacht 'Gléas ceangailte' a bhaint amach"</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_open_website">Oscail an suíomh Gréasáin</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_toast_get_activation_code_failed">Theip ar chód gníomhachtaithe a eisiúint</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_toast_get_authorization_code_failed">Theip ar chomhartha fíordheimhnithe a eisiúint</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_success_dialog_title">Sínithe isteach go rathúil</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_success_dialog_message">"Fíordheimhniú sábháilte
+
+• Ní dhéanfaidh do shocruithe Morphe fíordheimhniú Android VR a allmhairiú/a onnmhairiú
+• Mura n-úsáidtear an aip seo ar feadh 6 mhí, bainfidh Google an fíordheimhniú seo
+• Beidh ort síniú isteach arís má athraíonn tú do phasfhocal Google nó má dhíchláraíonn tú an gléas seo ó do shocruithe Google"</string>
+  <string name="morphe_oauth2_connection_failure_timeout">Níl OAuth2 ar fáil go sealadach (tá an t-am caite ag an API)</string>
+  <string name="morphe_oauth2_connection_failure_status_400">Tá an síniú isteach i Android VR imithe in éag, déan iarracht síniú isteach i VR arís</string>
+  <string name="morphe_oauth2_connection_failure_status">Níl OAuth2 ar fáil go sealadach (stádas %d)</string>
+  <string name="morphe_oauth2_connection_failure_generic">Níl OAuth2 ar fáil go sealadach</string>
+  <string name="morphe_oauth2_connection_failure_auth_not_approved">Ní féidir síniú isteach i VR, níor ceadaíodh fíordheimhniú an tsuímh ghréasáin</string>
+  <string name="morphe_oauth2_connection_failure_auth_error">Ní féidir síniú isteach i VR: %s</string>
+  <string name="morphe_oauth2_toast_reset">Logáilte amach as Android VR</string>
+  <string name="morphe_oauth2_toast_invalid">Comhartha síniú isteach VR neamhbhailí, déan iarracht síniú isteach i VR arís</string>
+  <!-- misc.audio.forceOriginalAudioPatch -->
+  <string name="morphe_force_original_audio_title">Fórsaigh teanga bhunaidh na fuaime</string>
+  <string name="morphe_force_original_audio_summary_on">Ag úsáid teanga bhunaidh na fuaime</string>
+  <string name="morphe_force_original_audio_summary_off">Ag úsáid fuaim réamhshocraithe</string>
+  <!-- 'Spoof video streams' should be the same translation used for 'morphe_spoof_video_streams_screen_title'. -->
+  <string name="morphe_force_original_audio_not_available">Chun an ghné seo a úsáid, athraigh \'Bréag-sruthanna físeáin\' chuig aon chliant seachas Android Studio</string>
+  <!-- misc.privacy.sanitizeSharingLinksPatch -->
+  <string name="morphe_sanitize_sharing_links_title">Glan na naisc roinnte</string>
+  <string name="morphe_sanitize_sharing_links_summary_on">Baintear an paraiméadar fiosrúcháin rianaithe de na naisc roinnte</string>
+  <string name="morphe_sanitize_sharing_links_summary_off">Ní bhaintear an paraiméadar fiosrúcháin rianaithe de na naisc roinnte</string>
+  <string name="morphe_replace_music_with_youtube_title">Athraigh na naisc comhroinnte go youtube.com</string>
+  <string name="morphe_replace_music_with_youtube_summary_on">Úsáideann naisc chomhroinnte youtube.com</string>
+  <string name="morphe_replace_music_with_youtube_summary_off">Úsáideann naisc chomhroinnte music.youtube.com</string>
+</resources>

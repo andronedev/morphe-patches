@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared with YouTube and YT Music -->
+<!--
+    Strings with new lines must be raw strings where they're wrapped in quotes and new lines are not encoded.
+    Raw strings still requires escaping embedded double quotes but escaping embedded single quotes is optional.
+
+    Raw strings are required because Crowdin AI translations regularly gets confused and
+    replace \n with an encoded new line character.
+
+    Bad:
+        <string name="summary_key">First \'item\' text\nSecond \"item\" text</string>
+
+    Good:
+        <string name="summary_key">"First 'item' text
+Second \"item\" text"</string>
+
+-->
+<resources>
+  <!-- layout.branding.baseCustomBrandingPatch -->
+  <string name="morphe_custom_branding_name_title">Nom de l\'application</string>
+  <!-- Translations of this should be identical to morphe_custom_branding_icon_entry_5 -->
+  <string name="morphe_custom_branding_name_entry_5">Personnalisé</string>
+  <string name="morphe_custom_branding_icon_title">Icône de l\'application</string>
+  <string name="morphe_custom_branding_icon_entry_1">Originale</string>
+  <string name="morphe_custom_branding_icon_entry_2">Morphe noir</string>
+  <string name="morphe_custom_branding_icon_entry_3">Morphe bleu foncé</string>
+  <string name="morphe_custom_branding_icon_entry_4">Morphe clair</string>
+  <!-- Translations of this should be identical to morphe_custom_branding_name_entry_5 -->
+  <string name="morphe_custom_branding_icon_entry_5">Personnalisé</string>
+  <!-- If any of these experimental strings are changed then also change the hard coded values in the patch for Reddit -->
+  <!-- misc.checks.experimentalAppNoticePatch -->
+  <string name="morphe_experimental_app_version_dialog_title">🚨 Alerte expérimentale ! 🚨</string>
+  <string name="morphe_experimental_app_version_dialog_message">"Vous utilisez une version expérimentale de l’application ⚠️ &lt;b&gt;%1$s&lt;/b&gt;
+&lt;br/&gt;&lt;br/&gt;
+🔧 Attendez-vous à des comportements inhabituels ou à des bugs non identifiés pendant que nous peaufinons les patchs pour cette version de l’application.
+&lt;br/&gt;&lt;br/&gt;
+Si vous souhaitez une expérience la plus stable possible, &lt;b&gt;désinstallez&lt;/b&gt; cette version et patchez la version recommandée de l’application ✅ &lt;b&gt;%2$s&lt;/b&gt;"</string>
+  <string name="morphe_experimental_app_version_dialog_confirm">⚠️ Je veux l\'expérimentale</string>
+  <string name="morphe_experimental_app_version_dialog_open_homepage">✅ Je veux la stable</string>
+  <!-- misc.dns.checkWatchHistoryDomainNameResolutionPatch -->
+  <string name="morphe_check_watch_history_domain_name_dialog_title">Avis Morphe</string>
+  <string name="morphe_check_watch_history_domain_name_dialog_message">Les vidéos que vous regardez ne sont pas enregistrées dans votre historique.&lt;br&gt;&lt;br&gt;La cause la plus probable est l\'utilisation d\'un serveur DNS bloqueur de publicités ou d\'un proxy.&lt;br&gt;&lt;br&gt;Pour résoudre ce problème, autorisez l\'accès à &lt;b&gt;s.youtube.com&lt;/b&gt; ou désactivez tous vos bloqueurs DNS et proxys.</string>
+  <string name="morphe_check_watch_history_domain_name_dialog_ignore">Ne plus afficher</string>
+  <!-- misc.fix.playback.spoofVideoStreamsPatch -->
+  <string name="morphe_spoof_video_streams_screen_title">Falsifier les flux vidéo</string>
+  <string name="morphe_spoof_video_streams_screen_summary">Falsifiez les flux vidéo du client afin d’éviter les problèmes de lecture</string>
+  <string name="morphe_spoof_video_streams_title">Falsifier les flux vidéo</string>
+  <string name="morphe_spoof_video_streams_summary_on">"Les flux vidéo sont falsifiés
+
+Si vous êtes abonné à YouTube Premium, ce paramètre n'est peut-être pas nécessaire"</string>
+  <string name="morphe_spoof_video_streams_summary_off">"Les flux vidéo ne sont pas falsifiés
+
+La lecture peut ne pas fonctionner"</string>
+  <string name="morphe_spoof_video_streams_no_clients_toast">Impossible de récupérer les flux du client.</string>
+  <string name="morphe_spoof_video_streams_user_dialog_message">La désactivation de ce paramètre peut entraîner des problèmes de lecture.</string>
+  <!-- "Spoof video streams" must use the same translation as morphe_spoof_video_streams_title.
+         "Sign in to Android VR" must use the same translation as morphe_spoof_video_streams_sign_in_android_vr_about_title -->
+  <string name="morphe_spoof_video_streams_no_clients_suggest_vr_toast">Essayez d\'activer : Falsifier les flux vidéo &gt; Connexion à Android VR</string>
+  <string name="morphe_spoof_video_streams_client_type_title">Client par défaut</string>
+  <!-- Ensure this translation matches the translation of morphe_spoof_video_streams_no_clients_suggest_vr_toast -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_title">Connexion à Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary">Non connecté à Android VR. Appuyez pour vous connecter</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary_signed_in">Actuellement connecté à Android VR</string>
+  <!-- "Default client" must be the same translated text as morphe_spoof_video_streams_client_type_title -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary_disabled">Pour utiliser cette fonction, changez le \'Client par défaut\' en Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_title">Se connecter à Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_not_signed_in_message">"La connexion à Android VR peut résoudre les problèmes de lecture pour certains utilisateurs
+
+Pour vous connecter, appuyez sur Continuer ci-dessous"</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_continue">Continuer</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_reset">Se déconnecter</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_title">Instructions</string>
+  <!-- "Open website" must use the same translation as morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_open_website -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_message">"Code d’activation : %s
+
+1. Appuyez sur 'Ouvrir le site web' ci-dessous pour ouvrir la page 'Connecter un appareil'
+2. Collez depuis le presse-papiers (ou saisissez manuellement) le code d’activation affiché ci-dessus
+3. Connectez-vous à Google si demandé. Si vous avez plusieurs comptes, choisissez celui associé à ce compte YouTube
+4. Appuyez sur 'Autoriser l’accès YouTube VR'
+5. Revenez à cette application une fois que le message 'Appareil connecté' apparaît"</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_open_website">Ouvrir le site web</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_toast_get_activation_code_failed">Échec de l’obtention du code d’activation</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_toast_get_authorization_code_failed">Échec de l’obtention d\'un jeton d\'authentification</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_success_dialog_title">Connecté avec succès</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_success_dialog_message">"Authentification enregistrée
+
+• Vos paramètres Morphe n’importeront/exportent pas l’authentification Android VR
+• Si cette application reste inutilisée pendant 6 mois, Google supprimera cette authentification
+• Vous devrez vous reconnecter si vous changez votre mot de passe Google ou si vous dissociez cet appareil de vos paramètres Google"</string>
+  <string name="morphe_oauth2_connection_failure_timeout">OAuth2 est temporairement indisponible (délai d’attente de l’API dépassé)</string>
+  <string name="morphe_oauth2_connection_failure_status_400">La connexion à Android VR a expiré, réessayez de vous connecter à VR</string>
+  <string name="morphe_oauth2_connection_failure_status">OAuth2 est temporairement indisponible (statut %d)</string>
+  <string name="morphe_oauth2_connection_failure_generic">OAuth2 est temporairement indisponible</string>
+  <string name="morphe_oauth2_connection_failure_auth_not_approved">Impossible de vous connecter à VR : l\'authentification a été refusée</string>
+  <string name="morphe_oauth2_connection_failure_auth_error">Impossible de vous connecter à VR : %s</string>
+  <string name="morphe_oauth2_toast_reset">Déconnexion de Android VR</string>
+  <string name="morphe_oauth2_toast_invalid">Jeton de connexion à VR invalide, veuillez réessayer la connexion à VR</string>
+  <!-- misc.audio.forceOriginalAudioPatch -->
+  <string name="morphe_force_original_audio_title">Forcer la langue audio d\'origine</string>
+  <string name="morphe_force_original_audio_summary_on">Utilisation de la langue audio d\'origine</string>
+  <string name="morphe_force_original_audio_summary_off">Utilisation de l\'audio par défaut</string>
+  <!-- 'Spoof video streams' should be the same translation used for 'morphe_spoof_video_streams_screen_title'. -->
+  <string name="morphe_force_original_audio_not_available">Pour utiliser cette fonctionnalité, changez \'Falsifier les flux vidéo\' vers n’importe quel client sauf Android Studio</string>
+  <!-- misc.privacy.sanitizeSharingLinksPatch -->
+  <string name="morphe_sanitize_sharing_links_title">Nettoyer les liens partagés</string>
+  <string name="morphe_sanitize_sharing_links_summary_on">Le paramètre de suivi est supprimé des liens partagés</string>
+  <string name="morphe_sanitize_sharing_links_summary_off">Le paramètre de suivi n\'est pas supprimé des liens partagés</string>
+  <string name="morphe_replace_music_with_youtube_title">Rediriger les liens de partage vers youtube.com</string>
+  <string name="morphe_replace_music_with_youtube_summary_on">Les liens partagés utilisent youtube.com</string>
+  <string name="morphe_replace_music_with_youtube_summary_off">Les liens partagés utilisent music.youtube.com</string>
+</resources>

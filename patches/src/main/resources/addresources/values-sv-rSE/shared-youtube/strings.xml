@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Shared with YouTube and YT Music -->
+<!--
+    Strings with new lines must be raw strings where they're wrapped in quotes and new lines are not encoded.
+    Raw strings still requires escaping embedded double quotes but escaping embedded single quotes is optional.
+
+    Raw strings are required because Crowdin AI translations regularly gets confused and
+    replace \n with an encoded new line character.
+
+    Bad:
+        <string name="summary_key">First \'item\' text\nSecond \"item\" text</string>
+
+    Good:
+        <string name="summary_key">"First 'item' text
+Second \"item\" text"</string>
+
+-->
+<resources>
+  <!-- layout.branding.baseCustomBrandingPatch -->
+  <string name="morphe_custom_branding_name_title">Appnamn</string>
+  <!-- Translations of this should be identical to morphe_custom_branding_icon_entry_5 -->
+  <string name="morphe_custom_branding_name_entry_5">Anpassad</string>
+  <string name="morphe_custom_branding_icon_title">Appikon</string>
+  <string name="morphe_custom_branding_icon_entry_1">Ursprunglig</string>
+  <string name="morphe_custom_branding_icon_entry_2">Morphe svart</string>
+  <string name="morphe_custom_branding_icon_entry_3">Morphe mörk</string>
+  <string name="morphe_custom_branding_icon_entry_4">Morphe ljus</string>
+  <!-- Translations of this should be identical to morphe_custom_branding_name_entry_5 -->
+  <string name="morphe_custom_branding_icon_entry_5">Anpassad</string>
+  <!-- If any of these experimental strings are changed then also change the hard coded values in the patch for Reddit -->
+  <!-- misc.checks.experimentalAppNoticePatch -->
+  <!-- misc.dns.checkWatchHistoryDomainNameResolutionPatch -->
+  <string name="morphe_check_watch_history_domain_name_dialog_title">Morphe-meddelande</string>
+  <string name="morphe_check_watch_history_domain_name_dialog_message">Din visningshistorik sparas inte.&lt;br&gt;&lt;br&gt;Detta orsakas troligen av en DNS-annonsblockerare eller nätverksproxy.&lt;br&gt;&lt;br&gt;För att åtgärda detta, vitlista &lt;b&gt;s.youtube.com&lt;/b&gt; eller stäng av alla DNS-blockerare och proxyer.</string>
+  <string name="morphe_check_watch_history_domain_name_dialog_ignore">Visa inte igen</string>
+  <!-- misc.fix.playback.spoofVideoStreamsPatch -->
+  <string name="morphe_spoof_video_streams_screen_title">Förfalska videoströmmar</string>
+  <string name="morphe_spoof_video_streams_screen_summary">Förfalska klientens videoströmmar för att förhindra uppspelningsproblem</string>
+  <string name="morphe_spoof_video_streams_title">Förfalska videoströmmar</string>
+  <string name="morphe_spoof_video_streams_summary_on">"Videoströmmar förfalskas
+
+Om du är en YouTube Premium-användare kanske den här inställningen inte behövs"</string>
+  <string name="morphe_spoof_video_streams_summary_off">"Videoströmmar förfalskas inte
+
+Uppspelning kanske inte fungerar"</string>
+  <string name="morphe_spoof_video_streams_no_clients_toast">Det gick inte att hämta några klientströmmar</string>
+  <string name="morphe_spoof_video_streams_user_dialog_message">Om du stänger av den här inställningen kan det leda till problem med uppspelning.</string>
+  <!-- "Spoof video streams" must use the same translation as morphe_spoof_video_streams_title.
+         "Sign in to Android VR" must use the same translation as morphe_spoof_video_streams_sign_in_android_vr_about_title -->
+  <string name="morphe_spoof_video_streams_no_clients_suggest_vr_toast">Testa att aktivera: Förfalska videoströmmar &gt; Logga in på Android VR</string>
+  <string name="morphe_spoof_video_streams_client_type_title">Standardklient</string>
+  <!-- Ensure this translation matches the translation of morphe_spoof_video_streams_no_clients_suggest_vr_toast -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_title">Logga in på Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary">Inte inloggad på Android VR. Tryck här för att logga in</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary_signed_in">För närvarande inloggad på Android VR</string>
+  <!-- "Default client" must be the same translated text as morphe_spoof_video_streams_client_type_title -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_about_summary_disabled">Om du vill använda den här funktionen ändrar du \"Standardklient\" till Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_title">Logga in på Android VR</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_not_signed_in_message">"Att logga in på Android VR kan lösa uppspelningsproblem för vissa användare
+
+Tryck på Fortsätt nedan för att logga in"</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_continue">Fortsätt</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_dialog_reset">Logga ut</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_title">Instruktioner</string>
+  <!-- "Open website" must use the same translation as morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_open_website -->
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_message">"Aktiveringskod: %s
+
+1. Tryck på \"Öppna webbplats\" nedan för att öppna webbplatsen \"Anslut en enhet\"
+2. Klistra in (eller skriv in) aktiveringskoden som visas ovan
+3. Logga in på Google om du blir ombedd. Om du har flera konton, välj det här YouTube-kontot
+4. Tryck på \"Tillåt YouTube VR\"-åtkomst
+5. Återgå till den här appen när du når meddelandet \"Enhet ansluten\""</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_activation_code_dialog_open_website">Öppna webbplats</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_toast_get_activation_code_failed">Det gick inte att utfärda en aktiveringskod</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_toast_get_authorization_code_failed">Det gick inte att utfärda en autentiseringstoken</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_success_dialog_title">Inloggning lyckades</string>
+  <string name="morphe_spoof_video_streams_sign_in_android_vr_success_dialog_message">"Autentisering sparad
+
+• Dina Morphe-inställningar kommer inte att importera/exportera Android VR-autentisering
+• Om den här appen inte används på 6 månader kommer Google att ta bort den här autentiseringen
+• Du behöver logga in igen om du ändrar ditt Google-lösenord eller avregistrerar den här enheten från dina Google-inställningar"</string>
+  <string name="morphe_oauth2_connection_failure_timeout">OAuth2 är för tillfället inte tillgängligt (API-tidsgräns nådd)</string>
+  <string name="morphe_oauth2_connection_failure_status_400">Inloggningen på Android VR har gått ut, försök logga in på VR igen</string>
+  <string name="morphe_oauth2_connection_failure_status">OAuth2 är för tillfället inte tillgängligt (status %d)</string>
+  <string name="morphe_oauth2_connection_failure_generic">OAuth2 är för tillfället inte tillgängligt</string>
+  <string name="morphe_oauth2_connection_failure_auth_not_approved">Det går inte att logga in på VR, webbautentiseringen godkändes inte</string>
+  <string name="morphe_oauth2_connection_failure_auth_error">Det går inte att logga in på VR: %s</string>
+  <string name="morphe_oauth2_toast_reset">Utloggad från Android VR</string>
+  <string name="morphe_oauth2_toast_invalid">Ogiltig VR-inloggningstoken, försök logga in på VR igen</string>
+  <!-- misc.audio.forceOriginalAudioPatch -->
+  <string name="morphe_force_original_audio_title">Tvinga ursprungligt ljudspråk</string>
+  <string name="morphe_force_original_audio_summary_on">Använder ursprungligt ljudspråk</string>
+  <string name="morphe_force_original_audio_summary_off">Använder standardljud</string>
+  <!-- 'Spoof video streams' should be the same translation used for 'morphe_spoof_video_streams_screen_title'. -->
+  <string name="morphe_force_original_audio_not_available">Om du vill använda den här funktionen ändrar du \"Förfalska videoströmmar\" till valfri klient utom Android Studio</string>
+  <!-- misc.privacy.sanitizeSharingLinksPatch -->
+  <string name="morphe_sanitize_sharing_links_title">Rensa delningslänkar</string>
+  <string name="morphe_sanitize_sharing_links_summary_on">Spårningsfrågeparametern tas bort från delade länkar</string>
+  <string name="morphe_sanitize_sharing_links_summary_off">Spårningsfrågeparametern tas inte bort från delade länkar</string>
+  <string name="morphe_replace_music_with_youtube_title">Ändra delningslänkar till youtube.com</string>
+  <string name="morphe_replace_music_with_youtube_summary_on">Delade länkar använder youtube.com</string>
+  <string name="morphe_replace_music_with_youtube_summary_off">Delade länkar använder music.youtube.com</string>
+</resources>

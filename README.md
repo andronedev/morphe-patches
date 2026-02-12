@@ -18,3 +18,7 @@ This repository now contains only Transit patch definitions.
 
 - The upstream Morphe Gradle plugin is private and may require credentials to run generation tasks.
 - `patches-list.json` and `patches-bundle.json` were regenerated manually to match the current Transit-only state.
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=andronedev/morphe-patches&type=date&legend=top-left)](https://www.star-history.com/#andronedev/morphe-patches&type=date&legend=top-left)

@@ -37,3 +37,4 @@ google-services.json
 # Local test workspace
 .tmp-test/
 .tmp-test.old*/
+.tmp*/

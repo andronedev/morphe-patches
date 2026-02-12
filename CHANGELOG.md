@@ -1,3 +1,10 @@
+# [2.2.0](https://github.com/andronedev/morphe-patches/compare/v2.1.0...v2.2.0) (2026-02-12)
+
+
+### Features
+
+* Add Custom Maps API Key patch and update README with new patch details ([c2db592](https://github.com/andronedev/morphe-patches/commit/c2db5921014b9508fae2db7146d6d73b28f3fdd6))
+
 # [2.2.0-dev.1](https://github.com/andronedev/morphe-patches/compare/v2.1.0...v2.2.0-dev.1) (2026-02-12)
 
 

@@ -1,3 +1,10 @@
+# [2.3.0](https://github.com/andronedev/morphe-patches/compare/v2.2.1...v2.3.0) (2026-04-01)
+
+
+### Features
+
+* Update Morphe dependencies and refactor Transit compatibility ([1613c6b](https://github.com/andronedev/morphe-patches/commit/1613c6b1e7b21be9b25e403ec2e45516115156ff))
+
 # [2.3.0-dev.1](https://github.com/andronedev/morphe-patches/compare/v2.2.1...v2.3.0-dev.1) (2026-04-01)
 
 

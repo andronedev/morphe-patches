@@ -3,6 +3,7 @@ package app.morphe.patches.transit.misc
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.replaceInstruction
 import app.morphe.patcher.patch.bytecodePatch
+import app.morphe.patches.transit.misc.Constants.COMPATIBILITY_TRANSIT
 import app.morphe.util.indexOfFirstInstructionOrThrow
 import app.morphe.util.indexOfFirstStringInstructionOrThrow
 import com.android.tools.smali.dexlib2.Opcode
@@ -13,7 +14,7 @@ val transitUnlockPatch = bytecodePatch(
     name = "Pro Features Unlock",
     description = "Unlock all pro features in Transit",
 ) {
-    compatibleWith("com.thetransitapp.droid")
+    compatibleWith(COMPATIBILITY_TRANSIT)
 
     execute {
         val method = IsPremiumFingerprint.method

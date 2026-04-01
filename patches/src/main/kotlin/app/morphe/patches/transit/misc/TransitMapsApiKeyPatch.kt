@@ -3,13 +3,14 @@ package app.morphe.patches.transit.misc
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patcher.patch.stringOption
+import app.morphe.patches.transit.misc.Constants.COMPATIBILITY_TRANSIT
 
 @Suppress("unused")
 val transitMapsApiKeyPatch = resourcePatch(
     name = "Custom Maps API Key",
     description = "Replace Transit Google Maps key with your own Android Maps SDK key for re-signed APKs.",
 ) {
-    compatibleWith("com.thetransitapp.droid")
+    compatibleWith(COMPATIBILITY_TRANSIT)
 
     val mapsApiKeyOption = stringOption(
         key = "mapsApiKey",

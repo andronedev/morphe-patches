@@ -52,3 +52,12 @@ internal object CheckUserFingerprint : Fingerprint(
         CHECK_USER_REINSERT_LOG_PREFIX,
     ),
 )
+
+/**
+ * The app store constructor. Its first argument is the OAuth client id, read once from a string
+ * resource and sent as the `client_id` form field of both token requests.
+ */
+internal object AppStoreConstructorFingerprint : Fingerprint(
+    returnType = "V",
+    custom = { method, classDef -> method.name == "<init>" && classDef.isAppStore() },
+)

@@ -59,8 +59,11 @@ internal object Constants {
     /** Pre-DataStore location of the refresh token, still read by the OkHttp authenticators. */
     const val LEGACY_REFRESH_TOKEN_KEY = "user_token_refresh"
 
-    /** String resource holding the OAuth client id the token requests are signed with. */
-    const val WEB_CLIENT_ID_STRING_RESOURCE = "web_client_id"
+    const val APPLICATION_CLASS_DESCRIPTOR = "Lio/stark/admob/App;"
+
+    const val CREDENTIALS_CLASS_DESCRIPTOR = "Lapp/morphe/extension/admobile/Credentials;"
+    const val CREDENTIALS_ACTIVITY_CLASS_NAME = "app.morphe.extension.admobile.CredentialsActivity"
+    const val CREDENTIALS_ACTIVITY_LABEL = "AdMobile credentials"
 
     const val CHECK_USER_LOG_PREFIX = "checkUser: "
     const val CHECK_USER_REINSERT_LOG_PREFIX = "checkUser REINSERT: "

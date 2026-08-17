@@ -6,6 +6,9 @@ Patch definitions for Transit and AdMobile.
 
 ### AdMobile — `io.stark.admob`
 
+- **Pro Unlock**
+  - Description: Unlock all pro features in AdMobile
+  - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/misc/ProUnlockPatch.kt`
 - **Hide Ads**
   - Description: Hide the native ads shown on the home, apps, app info and mediation screens
   - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/ads/HideAdsPatch.kt`
@@ -46,7 +49,28 @@ rename, so they survive app updates:
   the request fail instead of returning an ad. Resource names are never obfuscated.
 
 Use both together: the first guarantees nothing is drawn, the second stops the network traffic.
-Neither touches the purchase state, so pro features stay gated as they are in the stock app.
+
+## How the AdMobile pro unlock works
+
+Pro is a single boolean field on the app's DataStore wrapper. It is written in exactly one place —
+the `verifyAppPurchase` suspend body, which reads the purchase json and signature persisted after
+the last Play purchase and checks them against the stored Play public key with an RSA verification.
+Everything else only reads it:
+
+- The billing client mirrors it into a `MutableLiveData` at startup and again after every purchase
+  list it processes, including an empty one.
+- The base fragment exposes it to each screen, which drives the real report charts instead of the
+  demo data, the full ad unit and ad source breakdowns instead of a single teaser row, more than one
+  AdMob account, the premium accents in the profile, and the branch that skips loading an ad.
+
+**Pro Unlock** forces both writes to that flag to `true`: the one after a failed verification and
+the one taken when no purchase is persisted at all. The second is what makes it work on a device
+that never bought anything. The method is located by the log prefix it emits, a string constant R8
+does not touch.
+
+The verification is entirely local, so nothing else has to be defeated. Note that Pro Unlock also
+suppresses the ads on its own, since the ad loader sits behind the same flag — the two ad patches
+stay useful as a standalone, narrower option.
 
 ## ⚠️ Warning
 

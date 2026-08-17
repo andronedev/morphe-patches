@@ -50,6 +50,16 @@
         "com.thetransitapp.droid": null
       },
       "options": []
+    },
+    {
+      "name": "Pro Unlock",
+      "description": "Unlock all pro features in AdMobile.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "io.stark.admob": null
+      },
+      "options": []
     }
   ]
 }

@@ -1,8 +1,8 @@
 package app.morphe.patches.admobile.ads
 
 import app.morphe.patcher.Fingerprint
-import app.morphe.patches.admobile.ads.Constants.AD_NATIVE_VIEW_CLASS_DESCRIPTOR
-import app.morphe.patches.admobile.ads.Constants.NATIVE_AD_CLASS_DESCRIPTOR
+import app.morphe.patches.admobile.Constants.AD_NATIVE_VIEW_CLASS_DESCRIPTOR
+import app.morphe.patches.admobile.Constants.NATIVE_AD_CLASS_DESCRIPTOR
 import com.android.tools.smali.dexlib2.AccessFlags
 
 /**

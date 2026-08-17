@@ -2,8 +2,8 @@ package app.morphe.patches.admobile.ads
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.patch.bytecodePatch
-import app.morphe.patches.admobile.ads.Constants.COMPATIBILITY_ADMOBILE
-import app.morphe.patches.admobile.ads.Constants.NATIVE_AD_CLASS_DESCRIPTOR
+import app.morphe.patches.admobile.Constants.COMPATIBILITY_ADMOBILE
+import app.morphe.patches.admobile.Constants.NATIVE_AD_CLASS_DESCRIPTOR
 
 @Suppress("unused")
 val hideAdsPatch = bytecodePatch(

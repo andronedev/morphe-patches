@@ -2,8 +2,8 @@ package app.morphe.patches.admobile.ads
 
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.resourcePatch
-import app.morphe.patches.admobile.ads.Constants.AD_UNIT_STRING_RESOURCES
-import app.morphe.patches.admobile.ads.Constants.COMPATIBILITY_ADMOBILE
+import app.morphe.patches.admobile.Constants.AD_UNIT_STRING_RESOURCES
+import app.morphe.patches.admobile.Constants.COMPATIBILITY_ADMOBILE
 
 @Suppress("unused")
 val disableAdRequestsPatch = resourcePatch(

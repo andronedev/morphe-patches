@@ -1,4 +1,4 @@
-package app.morphe.patches.admobile.ads
+package app.morphe.patches.admobile
 
 import app.morphe.patcher.patch.ApkFileType
 import app.morphe.patcher.patch.Compatibility
@@ -30,4 +30,13 @@ internal object Constants {
         "ad_apps_native",
         "ad_app_info_native",
     )
+
+    /**
+     * Prefix of the diagnostic logged when the persisted Play purchase fails to verify. It sits
+     * right before the writes to the pro flag, and is distinct from the `"Verify Purchase [playKey:
+     * "` prefix logged by the billing client while processing a fresh purchase list.
+     */
+    const val VERIFY_APP_PURCHASE_LOG_PREFIX = "Verify App Purchase [playKey: "
+
+    const val VERIFY_APP_PURCHASE_EXCEPTION_LOG = "verifyAppPurchase Exception: "
 }

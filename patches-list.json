@@ -22,6 +22,91 @@
       ]
     },
     {
+      "name": "Custom AdMob Credentials",
+      "description": "Sign in with your own Google OAuth client and refresh token instead of the Google Sign-In flow, which a re-signed APK cannot use.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "io.stark.admob": null
+      },
+      "options": [
+        {
+          "key": "clientSecret",
+          "title": "OAuth client secret",
+          "description": "Client secret of your own Google OAuth client.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        },
+        {
+          "key": "refreshToken",
+          "title": "OAuth refresh token",
+          "description": "Refresh token issued to that client for the admob.readonly scope.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        },
+        {
+          "key": "publisherId",
+          "title": "AdMob publisher id",
+          "description": "Your AdMob publisher id, for example pub-0000000000000000.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        },
+        {
+          "key": "accountEmail",
+          "title": "Account email",
+          "description": "Email shown for the account. Only a label.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        },
+        {
+          "key": "timeZone",
+          "title": "Report time zone",
+          "description": "Time zone the AdMob reports are requested in.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "UTC",
+          "values": null
+        },
+        {
+          "key": "currency",
+          "title": "Report currency",
+          "description": "Currency the AdMob earnings are labelled with.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "USD",
+          "values": null
+        }
+      ]
+    },
+    {
+      "name": "Custom OAuth Client ID",
+      "description": "Send your own OAuth client id with the token requests. Use together with Custom AdMob Credentials, with the client the refresh token was issued to.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "io.stark.admob": null
+      },
+      "options": [
+        {
+          "key": "clientId",
+          "title": "OAuth client id",
+          "description": "Client id of your own Google OAuth client.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        }
+      ]
+    },
+    {
       "name": "Disable Ad Requests",
       "description": "Clear the AdMob ad unit ids so no ad is ever requested from the network.",
       "use": true,

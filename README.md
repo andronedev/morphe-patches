@@ -6,6 +6,12 @@ Patch definitions for Transit and AdMobile.
 
 ### AdMobile — `io.stark.admob`
 
+- **Custom AdMob Credentials**
+  - Description: Sign in with your own OAuth client and refresh token instead of Google Sign-In
+  - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/auth/CustomCredentialsPatch.kt`
+- **Custom OAuth Client ID**
+  - Description: Send your own OAuth client id with the token requests
+  - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/auth/CustomClientIdPatch.kt`
 - **Pro Unlock**
   - Description: Unlock all pro features in AdMobile
   - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/misc/ProUnlockPatch.kt`
@@ -71,6 +77,61 @@ does not touch.
 The verification is entirely local, so nothing else has to be defeated. Note that Pro Unlock also
 suppresses the ads on its own, since the ad loader sits behind the same flag — the two ad patches
 stay useful as a standalone, narrower option.
+
+## Signing in on a re-signed AdMobile
+
+A re-signed APK cannot use Google Sign-In: Google validates the calling package against the SHA-1
+the OAuth Android client was registered with, and answers `DEVELOPER_ERROR` (10). That is not
+specific to these patches — it applies to any re-signed build, and microG does not help, because it
+reports the app's real (new) certificate to the same endpoint. Installing in **mount mode** on a
+rooted device avoids it entirely by keeping the original signature.
+
+**Custom AdMob Credentials** removes the need for either. Google Sign-In is only used to obtain the
+initial authorization code; everything after it is plain HTTPS that does not care how the APK is
+signed. The app exchanges and refreshes tokens itself against `https://oauth2.googleapis.com/token`,
+sending `client_id` (from a string resource), `client_secret` and `refresh_token` (both decrypted
+out of its DataStore), and reads the reports straight from `https://admob.googleapis.com/`. Supply
+those three values yourself and the GMS step disappears.
+
+Note that the client secret never ships in the APK: the app downloads it from the developer's
+Firestore *after* a successful Firebase sign-in, along with the Play public key. That is why
+injecting only a refresh token cannot work, and why the patch takes your own OAuth client instead.
+
+### What you need
+
+1. A Google Cloud project with the **AdMob API** enabled.
+2. An OAuth consent screen (External, Testing) with your own account added as a test user.
+3. An OAuth client of type **Desktop**, which gives you a client id and a client secret.
+4. A refresh token for that client on the `https://www.googleapis.com/auth/admob.readonly` scope,
+   obtained by running the consent flow once with `access_type=offline`.
+5. Your AdMob publisher id (`pub-…`).
+
+Then apply both patches, passing the client id to **Custom OAuth Client ID** and the secret, refresh
+token, publisher id and account email to **Custom AdMob Credentials**.
+
+### Without the Morphe toolchain
+
+`tools/apply-admobile-credentials.py` performs the same five edits on an apktool-decoded APK:
+
+```sh
+java -jar apktool.jar d -o dec AdMobile.apk
+python3 tools/apply-admobile-credentials.py dec \
+    --client-id ... --client-secret ... --refresh-token ... \
+    --publisher-id pub-... --email you@example.com
+java -jar apktool.jar b -o AdMobile-patched.apk dec
+java -jar uber-apk-signer.jar --apks AdMobile-patched.apk --allowResign
+```
+
+### Limits
+
+- A build carrying your refresh token is as sensitive as the token itself — it grants read access to
+  your AdMob data. Do not distribute it.
+- The patch fabricates the single selected account. The account switcher stays empty, and adding a
+  second account still needs the Google Sign-In flow.
+- The Firebase session is never established, so anything backed by the developer's Firestore is
+  unavailable. `Pro Unlock` already covers the part of that which is gated on purchases.
+- The edits assemble cleanly and the resulting APK builds, but the flow has not been exercised
+  against a live account.
 
 ## ⚠️ Warning
 

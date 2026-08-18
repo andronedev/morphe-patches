@@ -209,9 +209,11 @@ def patch_sign_in_intent(smali_dir):
     in the navigation graph, so the single no-argument call returning an Intent inside a method that
     mentions it is the one to redirect.
     """
+    # apktool interleaves .line directives and blank lines between the call and its result.
     pattern = re.compile(
-        r"(invoke-virtual \{v\d+\}, L[^;]+;->\w+\(\)Landroid/content/Intent;\s*\n\s*\n"
-        r"\s*move-result-object (v\d+)\n)"
+        r"(invoke-virtual \{v\d+\}, L[^;]+;->\w+\(\)Landroid/content/Intent;\n"
+        r"(?:[ \t]*\n|[ \t]*\.line \d+\n)*"
+        r"[ \t]*move-result-object (v\d+)\n)"
     )
 
     path = None
@@ -284,6 +286,22 @@ def main():
     smali_dir = os.path.join(decoded_dir, "smali_classes3")
     if not os.path.isdir(smali_dir):
         sys.exit(f"{smali_dir} not found; decode the base APK with apktool first")
+
+    # Check every anchor before writing anything. A half-applied run leaves the tree with duplicate
+    # labels, and the only way back is to decode again.
+    with open(os.path.join(smali_dir, APP_STORE)) as handle:
+        app_store = handle.read()
+
+    if EXTENSION in app_store:
+        sys.exit("already patched; decode the APK again to start from a clean tree")
+
+    for name, anchor in ANCHORS.items():
+        path = APPLICATION if name == "on_create" else (
+            USER_DAO if name == "selected_user" else APP_STORE
+        )
+        with open(os.path.join(smali_dir, path)) as handle:
+            if anchor not in handle.read():
+                sys.exit(f"anchor '{name}' not found in {path}")
 
     patch_application(smali_dir)
     patch_datastore_read(smali_dir)

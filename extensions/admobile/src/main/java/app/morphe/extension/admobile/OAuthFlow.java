@@ -79,7 +79,7 @@ public final class OAuthFlow {
             activity.startActivity(new Intent(Intent.ACTION_VIEW,
                     Uri.parse(authorizationUrl(clientId, redirectUri, verifier))));
 
-            String code = awaitCode(server);
+            String code = awaitCode(activity, server);
             if (code == null) {
                 finish(activity, callback, false, "No authorisation code came back.");
                 return;
@@ -97,8 +97,14 @@ public final class OAuthFlow {
             String accessToken = jsonString(tokenResponse, "access_token");
 
             if (refreshToken == null || accessToken == null) {
-                finish(activity, callback, false, "Google returned no refresh token. Revoke the app "
-                        + "at myaccount.google.com/permissions and try again.");
+                // The body names what Google objected to, which is the whole diagnosis.
+                String detail = jsonString(tokenResponse, "error_description");
+                if (detail == null) detail = jsonString(tokenResponse, "error");
+
+                finish(activity, callback, false, detail != null
+                        ? "Token exchange refused: " + detail
+                        : "Google returned no refresh token. Revoke the app at "
+                                + "myaccount.google.com/permissions and try again.");
                 return;
             }
 
@@ -145,7 +151,7 @@ public final class OAuthFlow {
     }
 
     /** Reads the single request the browser makes on redirect and pulls the code out of it. */
-    private static String awaitCode(ServerSocket server) throws Exception {
+    private static String awaitCode(Activity activity, ServerSocket server) throws Exception {
         Socket socket = server.accept();
 
         try {
@@ -157,32 +163,47 @@ public final class OAuthFlow {
             output.write(REDIRECT_RESPONSE.getBytes("UTF-8"));
             output.flush();
 
+            // The browser is in the foreground at this point. Pull the app back up so the outcome
+            // lands on a live activity rather than one the system may have torn down, and so the
+            // user does not have to find their way back by hand.
+            activity.startActivity(new Intent(activity, CredentialsActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+                            | Intent.FLAG_ACTIVITY_SINGLE_TOP));
+
             if (requestLine == null) return null;
 
+            Log.i(TAG, "redirect: " + requestLine);
             return queryParameter(requestLine, "code");
         } finally {
             close(socket);
         }
     }
 
+    /**
+     * Reads one parameter out of the request line, which looks like {@code GET /?a=1&b=2 HTTP/1.1}.
+     *
+     * <p>Matched key by key rather than by searching for the name, so that a parameter merely
+     * ending in the one being looked for cannot be mistaken for it.
+     */
     private static String queryParameter(String requestLine, String name) {
-        int start = requestLine.indexOf(name + "=");
-        if (start < 0) return null;
+        int query = requestLine.indexOf('?');
+        if (query < 0) return null;
 
-        start += name.length() + 1;
+        int end = requestLine.indexOf(' ', query);
+        String parameters = end < 0 ? requestLine.substring(query + 1) : requestLine.substring(query + 1, end);
 
-        int end = start;
-        while (end < requestLine.length()) {
-            char character = requestLine.charAt(end);
-            if (character == '&' || character == ' ') break;
-            end++;
+        for (String parameter : parameters.split("&")) {
+            int separator = parameter.indexOf('=');
+            if (separator < 0 || !parameter.substring(0, separator).equals(name)) continue;
+
+            try {
+                return java.net.URLDecoder.decode(parameter.substring(separator + 1), "UTF-8");
+            } catch (Exception exception) {
+                return null;
+            }
         }
 
-        try {
-            return java.net.URLDecoder.decode(requestLine.substring(start, end), "UTF-8");
-        } catch (Exception exception) {
-            return null;
-        }
+        return null;
     }
 
     private static String randomVerifier() {
@@ -278,6 +299,11 @@ public final class OAuthFlow {
     }
 
     private static void finish(Activity activity, Callback callback, boolean success, String message) {
+        // Recorded before the callback, so the outcome is still readable if the form was torn down
+        // while the browser held the foreground.
+        Credentials.put(Credentials.KEY_LAST_STATUS, message);
+        Log.i(TAG, "finished: " + message);
+
         activity.runOnUiThread(() -> callback.onFinished(success, message));
     }
 

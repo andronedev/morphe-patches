@@ -5,6 +5,7 @@ import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patches.admobile.Constants.COMPATIBILITY_ADMOBILE
 import app.morphe.patches.admobile.Constants.CREDENTIALS_ACTIVITY_CLASS_NAME
 import app.morphe.patches.admobile.Constants.CREDENTIALS_ACTIVITY_LABEL
+import app.morphe.patches.admobile.Constants.CREDENTIALS_ACTIVITY_THEME
 
 /**
  * Declares the credentials form. It has no launcher entry and is not exported: the app's own sign
@@ -34,6 +35,9 @@ internal val credentialsScreenPatch = resourcePatch(
             activity.setAttribute("android:label", CREDENTIALS_ACTIVITY_LABEL)
             // Reached only from inside the app, so it needs neither a launcher entry nor export.
             activity.setAttribute("android:exported", "false")
+            // The app's own Material 3 theme, so the form follows its colours, its day and night
+            // variants, and the dynamic palette it already picks up on Android 12 and above.
+            activity.setAttribute("android:theme", CREDENTIALS_ACTIVITY_THEME)
 
             application.appendChild(activity)
         }

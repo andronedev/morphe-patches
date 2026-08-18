@@ -2,14 +2,16 @@ package app.morphe.extension.admobile;
 
 import android.app.Activity;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -25,15 +27,12 @@ import android.widget.Toast;
  * included, is read back from Google. The manual fields stay available for builds without a
  * bundled client, or to paste a token obtained elsewhere.
  *
- * <p>Built in code rather than from a layout so the patch adds no resources: it only has to declare
- * the activity in the manifest, and there are no ids to keep in step with the host app.
+ * <p>Built in code rather than from a layout so the patch adds no resources, and painted entirely
+ * from the Material 3 colour roles of the app's own theme, which the patch puts on this activity.
+ * That way it follows the app in light and dark, and picks up the dynamic palette on Android 12
+ * and above, without shipping colours of its own.
  */
 public final class CredentialsActivity extends Activity {
-
-    private static final int BACKGROUND = 0xFF121212;
-    private static final int FOREGROUND = 0xFFE0E0E0;
-    private static final int MUTED = 0xFF9E9E9E;
-    private static final int ACCENT = 0xFFF0C040;
 
     /** key, label, hint, required. */
     private static final String[][] FIELDS = {
@@ -48,50 +47,62 @@ public final class CredentialsActivity extends Activity {
 
     private final EditText[] inputs = new EditText[FIELDS.length];
 
-    private Button signIn;
+    private int surface;
+    private int onSurface;
+    private int onSurfaceVariant;
+    private int surfaceVariant;
+    private int primary;
+    private int onPrimary;
+
+    private TextView signIn;
     private LinearLayout manualSection;
     private TextView manualToggle;
+    private TextView status;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
         Credentials.init(this);
+        resolvePalette();
 
-        int padding = dp(20);
+        int padding = dp(24);
 
         LinearLayout form = new LinearLayout(this);
         form.setOrientation(LinearLayout.VERTICAL);
-        form.setPadding(padding, padding, padding, padding);
+        // The extra top inset keeps the title clear of the status bar, which the activity draws
+        // under because the app's theme is edge to edge.
+        form.setPadding(padding, padding + statusBarHeight(), padding, padding);
 
-        form.addView(text("Connect your AdMob account", ACCENT, 22, Gravity.CENTER_HORIZONTAL, 0, 0));
-        form.addView(text(
+        form.addView(headline("Connect your AdMob account"));
+        form.addView(body(
                 "This build reads your reports with Google API credentials of its own, so it does "
-                        + "not need the Google sign in that a re-signed app cannot complete.",
-                MUTED, 13, Gravity.NO_GRAVITY, dp(10), 0));
+                        + "not need the Google sign in that a re-signed app cannot complete."));
 
         boolean bundledClient = Credentials.hasClient();
 
-        signIn = new Button(this);
-        signIn.setText("Sign in with Google");
-        signIn.setAllCaps(false);
-        signIn.setOnClickListener(new View.OnClickListener() {
+        signIn = filledButton("Sign in with Google", new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startSignIn();
             }
         });
-        form.addView(signIn, marginTop(dp(24)));
+        form.addView(signIn, marginTop(dp(28)));
+
+        status = body("");
+        status.setVisibility(View.GONE);
+        form.addView(status);
 
         if (!bundledClient) {
-            form.addView(text(
+            form.addView(body(
                     "No OAuth client is built into this patch. Fill the client id and secret in "
-                            + "below first, then sign in — or paste a refresh token directly.",
-                    MUTED, 12, Gravity.NO_GRAVITY, dp(10), 0));
+                            + "below first, then sign in — or paste a refresh token directly."));
         }
 
-        manualToggle = text("Enter the values manually", ACCENT, 13, Gravity.CENTER_HORIZONTAL,
-                dp(20), dp(4));
+        manualToggle = body("Enter the values manually");
+        manualToggle.setTextColor(primary);
+        manualToggle.setGravity(Gravity.CENTER_HORIZONTAL);
+        manualToggle.setPadding(0, dp(24), 0, dp(4));
         manualToggle.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -107,10 +118,31 @@ public final class CredentialsActivity extends Activity {
         form.addView(manualSection);
 
         ScrollView root = new ScrollView(this);
-        root.setBackgroundColor(BACKGROUND);
+        root.setBackgroundColor(surface);
         root.addView(form);
 
         setContentView(root);
+    }
+
+    /**
+     * The browser holds the foreground while the flow runs, so the result is picked up here rather
+     * than relying on the callback reaching a form the system may have torn down meanwhile.
+     */
+    @Override
+    protected void onResume() {
+        super.onResume();
+
+        if (Credentials.isConfigured()) {
+            restartApp();
+            return;
+        }
+
+        String last = Credentials.get(Credentials.KEY_LAST_STATUS);
+        status.setText(last);
+        status.setVisibility(last.isEmpty() ? View.GONE : View.VISIBLE);
+
+        signIn.setEnabled(true);
+        signIn.setText("Sign in with Google");
     }
 
     private LinearLayout buildManualSection() {
@@ -123,35 +155,27 @@ public final class CredentialsActivity extends Activity {
             boolean required = !field[3].isEmpty();
 
             if (!required && !optionalHeadingAdded) {
-                section.addView(text("Optional", ACCENT, 15, Gravity.NO_GRAVITY, dp(24), 0));
+                TextView optional = body("Optional");
+                optional.setTextColor(primary);
+                optional.setPadding(0, dp(24), 0, 0);
+                section.addView(optional);
                 optionalHeadingAdded = true;
             }
 
-            section.addView(text(field[1], Color.WHITE, 13, Gravity.NO_GRAVITY, dp(14), 0));
+            TextView label = body(field[1]);
+            label.setTextColor(onSurface);
+            label.setPadding(0, dp(16), 0, dp(6));
+            section.addView(label);
 
-            EditText input = new EditText(this);
-            input.setSingleLine(true);
-            input.setHint(field[2]);
-            input.setHintTextColor(MUTED);
-            input.setTextColor(FOREGROUND);
-            input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-            input.setText(Credentials.get(field[0]));
-            section.addView(input);
-
-            inputs[i] = input;
+            section.addView(inputs[i] = filledField(field[2], Credentials.get(field[0])));
         }
 
-        Button save = new Button(this);
-        save.setText("Save and start");
-        save.setAllCaps(false);
-        save.setOnClickListener(new View.OnClickListener() {
+        section.addView(filledButton("Save and start", new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 save();
             }
-        });
-        section.addView(save, marginTop(dp(24)));
+        }), marginTop(dp(28)));
 
         return section;
     }
@@ -177,7 +201,9 @@ public final class CredentialsActivity extends Activity {
                         signIn.setEnabled(true);
                         signIn.setText("Sign in with Google");
 
-                        Toast.makeText(CredentialsActivity.this, message, Toast.LENGTH_LONG).show();
+                        status.setText(message);
+                        status.setVisibility(View.VISIBLE);
+
                         if (success) restartApp();
                     }
                 });
@@ -223,6 +249,102 @@ public final class CredentialsActivity extends Activity {
         finish();
     }
 
+    // Material 3 surfaces, painted from the theme the patch puts on this activity.
+
+    private void resolvePalette() {
+        surface = themeColor("colorSurface", 0xFF121212);
+        onSurface = themeColor("colorOnSurface", Color.WHITE);
+        onSurfaceVariant = themeColor("colorOnSurfaceVariant", 0xFF9E9E9E);
+        surfaceVariant = themeColor("colorSurfaceVariant", 0xFF1E1E1E);
+        primary = themeColor("colorPrimary", 0xFFF0C040);
+        onPrimary = themeColor("colorOnPrimary", 0xFF121212);
+    }
+
+    /**
+     * Material's colour roles are attributes of the host app's resources, so they are looked up by
+     * name: the extension is compiled on its own and has no R class for them.
+     */
+    private int themeColor(String attributeName, int fallback) {
+        int identifier = getResources().getIdentifier(attributeName, "attr", getPackageName());
+        if (identifier == 0) return fallback;
+
+        TypedValue value = new TypedValue();
+        if (!getTheme().resolveAttribute(identifier, value, true)) return fallback;
+
+        if (value.type >= TypedValue.TYPE_FIRST_COLOR_INT && value.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+            return value.data;
+        }
+
+        try {
+            return getResources().getColor(value.resourceId, getTheme());
+        } catch (Exception exception) {
+            return fallback;
+        }
+    }
+
+    private TextView headline(String content) {
+        TextView view = new TextView(this);
+        view.setText(content);
+        view.setTextColor(onSurface);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 24);
+        return view;
+    }
+
+    private TextView body(String content) {
+        TextView view = new TextView(this);
+        view.setText(content);
+        view.setTextColor(onSurfaceVariant);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+        view.setLineSpacing(dp(3), 1f);
+        view.setPadding(0, dp(10), 0, 0);
+        return view;
+    }
+
+    /** A filled button: fully rounded, primary container, label in the matching on-primary role. */
+    private TextView filledButton(String label, View.OnClickListener listener) {
+        TextView button = new TextView(this);
+        button.setText(label);
+        button.setTextColor(onPrimary);
+        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        button.setGravity(Gravity.CENTER);
+        button.setPadding(dp(24), dp(14), dp(24), dp(14));
+        button.setClickable(true);
+        button.setOnClickListener(listener);
+
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(primary);
+        shape.setCornerRadius(dp(20));
+        button.setBackground(new RippleDrawable(
+                ColorStateList.valueOf(withAlpha(onPrimary, 0x33)), shape, null));
+
+        return button;
+    }
+
+    /** A filled text field: surface variant behind, rounded top corners, as Material 3 draws them. */
+    private EditText filledField(String hint, String value) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint(hint);
+        input.setHintTextColor(withAlpha(onSurfaceVariant, 0x99));
+        input.setTextColor(onSurface);
+        input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        input.setText(value);
+        input.setPadding(dp(16), dp(14), dp(16), dp(14));
+
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(surfaceVariant);
+        float radius = dp(8);
+        shape.setCornerRadii(new float[]{radius, radius, radius, radius, 0, 0, 0, 0});
+        input.setBackground(shape);
+
+        return input;
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (alpha << 24);
+    }
+
     private LinearLayout.LayoutParams marginTop(int margin) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -230,14 +352,9 @@ public final class CredentialsActivity extends Activity {
         return params;
     }
 
-    private TextView text(String content, int color, int sizeSp, int gravity, int topDp, int bottomDp) {
-        TextView view = new TextView(this);
-        view.setText(content);
-        view.setTextColor(color);
-        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, sizeSp);
-        if (gravity != Gravity.NO_GRAVITY) view.setGravity(gravity);
-        view.setPadding(0, topDp, 0, bottomDp);
-        return view;
+    private int statusBarHeight() {
+        int identifier = getResources().getIdentifier("status_bar_height", "dimen", "android");
+        return identifier > 0 ? getResources().getDimensionPixelSize(identifier) : dp(24);
     }
 
     private int dp(int value) {

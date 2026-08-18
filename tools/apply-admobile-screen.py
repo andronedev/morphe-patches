@@ -267,7 +267,8 @@ def patch_manifest(decoded_dir):
 
     activity = (
         '<activity android:name="app.morphe.extension.admobile.CredentialsActivity" '
-        'android:label="AdMobile credentials" android:exported="false"/>'
+        'android:label="AdMobile credentials" android:exported="false" '
+        'android:theme="@style/AppTheme"/>'
     )
 
     source, count = re.subn(r"</application>", activity + "</application>", source, count=1)

@@ -68,6 +68,9 @@ internal object Constants {
     const val CREDENTIALS_ACTIVITY_CLASS_NAME = "app.morphe.extension.admobile.CredentialsActivity"
     const val CREDENTIALS_ACTIVITY_LABEL = "AdMobile credentials"
 
+    /** The app's own Material 3 theme, so the form matches the rest of the app. */
+    const val CREDENTIALS_ACTIVITY_THEME = "@style/AppTheme"
+
     const val CHECK_USER_LOG_PREFIX = "checkUser: "
     const val CHECK_USER_REINSERT_LOG_PREFIX = "checkUser REINSERT: "
     const val ACCOUNT_MANAGER_LOG_TAG = "AccountManager"

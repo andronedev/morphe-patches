@@ -35,6 +35,12 @@ public final class Credentials {
     public static final String KEY_TIME_ZONE = "time_zone";
     public static final String KEY_CURRENCY = "currency";
 
+    /**
+     * Outcome of the last sign in. Kept because the browser holds the foreground while the flow
+     * runs, and the system is free to tear the form down behind it — a toast would be lost.
+     */
+    public static final String KEY_LAST_STATUS = "last_status";
+
     /** Names the app looks up in its encrypted DataStore. */
     private static final String DATA_STORE_CLIENT_SECRET = "web_client_secret";
     private static final String DATA_STORE_PUBLISHER_ID = "user_pub_id";

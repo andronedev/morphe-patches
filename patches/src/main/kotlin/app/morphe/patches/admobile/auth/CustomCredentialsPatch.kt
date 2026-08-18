@@ -129,6 +129,22 @@ val customCredentialsPatch = bytecodePatch(
             """,
         )
 
+        // 2b. Both writes are mirrored. An access token lasts an hour, after which the app refreshes
+        //     it and stores the new one; without this the reads above would keep answering with the
+        //     expired value and every request would fail.
+        AppStoreWriteFingerprint.method.addInstructions(
+            0,
+            """
+                iget-object v0, p1, $PREFERENCES_KEY_CLASS_DESCRIPTOR->a:Ljava/lang/String;
+                invoke-static { v0, p2 }, $CREDENTIALS_CLASS_DESCRIPTOR->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
+            """,
+        )
+
+        AppStoreLegacyWriteFingerprint.method.addInstructions(
+            0,
+            "invoke-static { p1, p2 }, $CREDENTIALS_CLASS_DESCRIPTOR->observeWrite(Ljava/lang/String;Ljava/lang/String;)V",
+        )
+
         // 3. The client id is read once, when the app store is constructed, and travels to both
         //    token requests as a field. Substituting the constructor argument covers both. The
         //    constructor reserves no locals, so the parameter register is reused in place.

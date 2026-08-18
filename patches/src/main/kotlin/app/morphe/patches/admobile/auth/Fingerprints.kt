@@ -41,6 +41,23 @@ internal object AppStoreLegacyReadFingerprint : Fingerprint(
 )
 
 /**
+ * The DataStore write, the mirror of [AppStoreReadFingerprint]. Hooked so a token the app refreshes
+ * for itself replaces the one handed to it, rather than being shadowed by an expired value.
+ */
+internal object AppStoreWriteFingerprint : Fingerprint(
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf(PREFERENCES_KEY_CLASS_DESCRIPTOR, "Ljava/lang/String;", "Lyh/c;"),
+    custom = { _, classDef -> classDef.isAppStore() },
+)
+
+/** The same write for the pre-DataStore storage, where the authenticators put refreshed tokens. */
+internal object AppStoreLegacyWriteFingerprint : Fingerprint(
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;", "Ljava/lang/String;"),
+    custom = { _, classDef -> classDef.isAppStore() },
+)
+
+/**
  * `AccountManager.checkUser()`, the startup session check. It asks the user DAO for the selected
  * account, logs it, and either reports "no session" or validates the account against the AdMob API.
  *

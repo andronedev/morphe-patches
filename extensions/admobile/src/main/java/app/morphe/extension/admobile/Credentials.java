@@ -30,6 +30,12 @@ public final class Credentials {
     public static final String KEY_CLIENT_ID = "client_id";
     public static final String KEY_CLIENT_SECRET = "client_secret";
     public static final String KEY_REFRESH_TOKEN = "refresh_token";
+
+    /**
+     * Short lived, but the app refuses to fetch anything while it looks absent, so it is served
+     * alongside the refresh token and kept current from the app's own writes.
+     */
+    public static final String KEY_ACCESS_TOKEN = "access_token";
     public static final String KEY_PUBLISHER_ID = "publisher_id";
     public static final String KEY_EMAIL = "email";
     public static final String KEY_TIME_ZONE = "time_zone";
@@ -56,9 +62,11 @@ public final class Credentials {
     private static final String DATA_STORE_CLIENT_SECRET = "web_client_secret";
     private static final String DATA_STORE_PUBLISHER_ID = "user_pub_id";
     private static final String DATA_STORE_REFRESH_TOKEN_PREFIX = "token_refresh_";
+    private static final String DATA_STORE_ACCESS_TOKEN_PREFIX = "token_access_";
 
-    /** Name the OkHttp authenticators look up in the pre-DataStore storage. */
+    /** Names the OkHttp authenticators look up in the pre-DataStore storage. */
     private static final String LEGACY_REFRESH_TOKEN = "user_token_refresh";
+    private static final String LEGACY_ACCESS_TOKEN = "user_token_access";
 
     private static Context context;
 
@@ -148,15 +156,42 @@ public final class Credentials {
         if (DATA_STORE_CLIENT_SECRET.equals(name)) return effectiveClientSecret();
         if (DATA_STORE_PUBLISHER_ID.equals(name)) return get(KEY_PUBLISHER_ID);
         if (name.startsWith(DATA_STORE_REFRESH_TOKEN_PREFIX)) return get(KEY_REFRESH_TOKEN);
+        if (name.startsWith(DATA_STORE_ACCESS_TOKEN_PREFIX)) return get(KEY_ACCESS_TOKEN);
 
         return null;
     }
 
-    /** Answers the pre-DataStore read the OkHttp authenticators try first. */
+    /**
+     * Answers the pre-DataStore reads the OkHttp authenticators try first.
+     *
+     * <p>The access token matters as much as the refresh token here: the app treats a blank one as
+     * "not signed in" and skips fetching altogether, whatever else is in place.
+     */
     public static String forLegacyKey(String name) {
         if (name == null || !isConfigured()) return null;
 
-        return LEGACY_REFRESH_TOKEN.equals(name) ? get(KEY_REFRESH_TOKEN) : null;
+        if (LEGACY_REFRESH_TOKEN.equals(name)) return get(KEY_REFRESH_TOKEN);
+        if (LEGACY_ACCESS_TOKEN.equals(name)) return get(KEY_ACCESS_TOKEN);
+
+        return null;
+    }
+
+    /**
+     * Mirrors the app's own token writes.
+     *
+     * <p>An access token lasts an hour, after which the app refreshes it and stores the new one.
+     * Without this the reads above would keep answering with the expired one and every request
+     * would fail, so what the app persists is taken as the newer truth.
+     */
+    public static void observeWrite(String name, String value) {
+        if (name == null || value == null || value.isEmpty()) return;
+
+        if (LEGACY_ACCESS_TOKEN.equals(name) || name.startsWith(DATA_STORE_ACCESS_TOKEN_PREFIX)) {
+            put(KEY_ACCESS_TOKEN, value);
+        } else if (LEGACY_REFRESH_TOKEN.equals(name)
+                || name.startsWith(DATA_STORE_REFRESH_TOKEN_PREFIX)) {
+            put(KEY_REFRESH_TOKEN, value);
+        }
     }
 
     /**

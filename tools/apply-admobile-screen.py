@@ -37,6 +37,9 @@ ANCHORS = {
     "legacy_read": ".method public final h(Ljava/lang/String;)Ljava/lang/String;\n    .locals 4\n",
     "constructor": ".method public constructor <init>(Ljava/lang/String;Lh1/f;Landroid/content/"
                    "SharedPreferences;Ldh/a;Ljj/c;Lxf/t;)V\n    .locals 0\n",
+    "datastore_write": ".method public final n(Ll1/d;Ljava/lang/String;Lyh/c;)Ljava/lang/Object;\n"
+                       "    .locals 3\n",
+    "legacy_write": ".method public final o(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 1\n",
     "selected_user": ".method public final b(Lyh/c;)Ljava/lang/Object;\n    .locals 4\n",
     "on_create": ".method public final onCreate()V\n    .locals 7\n",
 }
@@ -101,6 +104,27 @@ def patch_legacy_read(smali_dir):
 
     :morphe_original_legacy
     nop
+""",
+    )
+
+
+def patch_writes(smali_dir):
+    """Mirror the app's own token writes, so a refreshed token is not shadowed by an expired one."""
+    insert_after(
+        os.path.join(smali_dir, APP_STORE),
+        ANCHORS["datastore_write"],
+        f"""
+    iget-object v0, p1, Ll1/d;->a:Ljava/lang/String;
+
+    invoke-static {{v0, p2}}, {EXTENSION}->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
+""",
+    )
+
+    insert_after(
+        os.path.join(smali_dir, APP_STORE),
+        ANCHORS["legacy_write"],
+        f"""
+    invoke-static {{p1, p2}}, {EXTENSION}->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
 """,
     )
 
@@ -307,13 +331,14 @@ def main():
     patch_application(smali_dir)
     patch_datastore_read(smali_dir)
     patch_legacy_read(smali_dir)
+    patch_writes(smali_dir)
     patch_constructor(smali_dir)
     add_synthetic_user(smali_dir)
     patch_sign_in_intent(smali_dir)
     patch_selected_user_query(smali_dir)
     patch_manifest(decoded_dir)
 
-    print("applied 8 edits; now build, inject the extension dex, and sign")
+    print("applied 10 edits; now build, inject the extension dex, and sign")
 
 
 if __name__ == "__main__":

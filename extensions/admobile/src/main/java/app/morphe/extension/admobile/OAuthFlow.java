@@ -158,6 +158,7 @@ public final class OAuthFlow {
             }
 
             Credentials.put(Credentials.KEY_REFRESH_TOKEN, refreshToken);
+            Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
 
             // The AdMob API names the account holding the token, so the publisher id, currency and
             // time zone never have to be looked up in the console.

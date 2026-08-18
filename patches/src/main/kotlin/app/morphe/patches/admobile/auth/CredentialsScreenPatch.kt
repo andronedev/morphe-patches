@@ -7,12 +7,12 @@ import app.morphe.patches.admobile.Constants.CREDENTIALS_ACTIVITY_CLASS_NAME
 import app.morphe.patches.admobile.Constants.CREDENTIALS_ACTIVITY_LABEL
 
 /**
- * Declares the credentials form and gives it its own launcher entry, which is the least invasive
- * way to reach it: the app's own navigation graph is left alone.
+ * Declares the credentials form. It has no launcher entry and is not exported: the app's own sign
+ * in button opens it, so setup stays one tap from the screen the user already lands on.
  */
 internal val credentialsScreenPatch = resourcePatch(
     name = "AdMob Credentials Screen",
-    description = "Add a launcher entry for the screen where the AdMob credentials are entered.",
+    description = "Declare the screen where the AdMob credentials are entered.",
 ) {
     compatibleWith(COMPATIBILITY_ADMOBILE)
 
@@ -32,21 +32,9 @@ internal val credentialsScreenPatch = resourcePatch(
             val activity = document.createElement("activity")
             activity.setAttribute("android:name", CREDENTIALS_ACTIVITY_CLASS_NAME)
             activity.setAttribute("android:label", CREDENTIALS_ACTIVITY_LABEL)
-            activity.setAttribute("android:exported", "true")
-            // Its own task, so leaving the form does not drop the user into the app mid-session.
-            activity.setAttribute("android:launchMode", "singleTask")
+            // Reached only from inside the app, so it needs neither a launcher entry nor export.
+            activity.setAttribute("android:exported", "false")
 
-            val intentFilter = document.createElement("intent-filter")
-
-            val action = document.createElement("action")
-            action.setAttribute("android:name", "android.intent.action.MAIN")
-            intentFilter.appendChild(action)
-
-            val category = document.createElement("category")
-            category.setAttribute("android:name", "android.intent.category.LAUNCHER")
-            intentFilter.appendChild(category)
-
-            activity.appendChild(intentFilter)
             application.appendChild(activity)
         }
     }

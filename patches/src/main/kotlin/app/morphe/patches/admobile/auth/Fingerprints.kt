@@ -4,8 +4,12 @@ import app.morphe.patcher.Fingerprint
 import app.morphe.patches.admobile.Constants.ACCOUNT_MANAGER_LOG_TAG
 import app.morphe.patches.admobile.Constants.CHECK_USER_LOG_PREFIX
 import app.morphe.patches.admobile.Constants.CHECK_USER_REINSERT_LOG_PREFIX
+import app.morphe.patches.admobile.Constants.LAUNCH_FRAGMENT_CLASS_DESCRIPTOR
 import app.morphe.patches.admobile.Constants.PREFERENCES_KEY_CLASS_DESCRIPTOR
 import com.android.tools.smali.dexlib2.iface.ClassDef
+import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
+import com.android.tools.smali.dexlib2.iface.reference.FieldReference
+import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 
 /**
  * The app store keeps every secret in a DataStore whose values are encrypted at rest, and declares
@@ -60,4 +64,33 @@ internal object CheckUserFingerprint : Fingerprint(
 internal object AppStoreConstructorFingerprint : Fingerprint(
     returnType = "V",
     custom = { method, classDef -> method.name == "<init>" && classDef.isAppStore() },
+)
+
+/**
+ * The click handler behind the launch screen's sign in button. It reads the sign-in client off the
+ * launch fragment and hands the intent it builds to an activity result launcher.
+ *
+ * Both the client and this lambda are obfuscated, but the launch fragment is named in the
+ * navigation graph, so the one method that mentions it and builds an [android.content.Intent]
+ * without arguments is the call to patch.
+ */
+internal object SignInIntentFingerprint : Fingerprint(
+    returnType = "V",
+    parameters = listOf("Landroid/view/View;"),
+    custom = { method, _ ->
+        val implementation = method.implementation
+
+        implementation != null &&
+            implementation.instructions.any { instruction ->
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
+                reference?.definingClass == LAUNCH_FRAGMENT_CLASS_DESCRIPTOR ||
+                    (instruction as? ReferenceInstruction)?.reference.let { it as? FieldReference }
+                        ?.definingClass == LAUNCH_FRAGMENT_CLASS_DESCRIPTOR
+            } &&
+            implementation.instructions.any { instruction ->
+                val reference = (instruction as? ReferenceInstruction)?.reference as? MethodReference
+                reference?.returnType == "Landroid/content/Intent;" &&
+                    reference.parameterTypes.isEmpty()
+            }
+    },
 )

@@ -1,6 +1,7 @@
 package app.morphe.extension.admobile;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.util.Log;
 
@@ -122,6 +123,21 @@ public final class Credentials {
     public static String clientIdOrOriginal(String original) {
         String clientId = get(KEY_CLIENT_ID);
         return clientId.isEmpty() ? original : clientId;
+    }
+
+    /**
+     * Substitutes the Google Sign-In intent while no credentials are stored, so the app's own sign
+     * in button opens the form instead of a flow a re-signed APK cannot complete. Once they are
+     * stored the account is served locally and the button is never reached again.
+     *
+     * @param original the intent the app built.
+     */
+    public static Intent signInIntentOrOriginal(Intent original) {
+        if (isConfigured() || context == null) return original;
+
+        Intent intent = new Intent();
+        intent.setClassName(context.getPackageName(), CredentialsActivity.class.getName());
+        return intent;
     }
 
     public static String publisherId() {

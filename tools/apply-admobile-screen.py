@@ -29,6 +29,7 @@ USER = "Lio/stark/admob/model/entity/User;"
 APP_STORE = "xf/i.smali"
 USER_DAO = "se/j.smali"
 USER_ENTITY = "io/stark/admob/model/entity/User.smali"
+LAUNCH_FRAGMENT = "Lio/stark/admob/ui/launch/LaunchFragment;"
 APPLICATION = "io/stark/admob/App.smali"
 
 ANCHORS = {
@@ -201,8 +202,60 @@ def patch_selected_user_query(smali_dir):
     )
 
 
+def patch_sign_in_intent(smali_dir):
+    """The launch screen's sign in button opens the form while nothing is configured.
+
+    Both the sign-in client and the click handler are obfuscated, but the launch fragment is named
+    in the navigation graph, so the single no-argument call returning an Intent inside a method that
+    mentions it is the one to redirect.
+    """
+    pattern = re.compile(
+        r"(invoke-virtual \{v\d+\}, L[^;]+;->\w+\(\)Landroid/content/Intent;\s*\n\s*\n"
+        r"\s*move-result-object (v\d+)\n)"
+    )
+
+    path = None
+    match = None
+    for directory, _, names in os.walk(smali_dir):
+        for name in names:
+            if not name.endswith(".smali"):
+                continue
+
+            candidate = os.path.join(directory, name)
+            with open(candidate) as handle:
+                contents = handle.read()
+
+            if LAUNCH_FRAGMENT not in contents:
+                continue
+
+            found = pattern.search(contents)
+            if found:
+                path, match, source = candidate, found, contents
+                break
+        if match:
+            break
+
+    if not match:
+        sys.exit("sign-in intent call not found")
+
+    register = match.group(2)
+    source = source.replace(
+        match.group(1),
+        match.group(1)
+        + f"""
+    invoke-static {{{register}}}, {EXTENSION}->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
+
+    move-result-object {register}
+""",
+        1,
+    )
+
+    with open(path, "w") as handle:
+        handle.write(source)
+
+
 def patch_manifest(decoded_dir):
-    """Its own launcher entry, which leaves the app's navigation graph alone."""
+    """Declared but not exported: it is reached from inside the app, never from the launcher."""
     path = os.path.join(decoded_dir, "AndroidManifest.xml")
     with open(path) as handle:
         source = handle.read()
@@ -212,13 +265,7 @@ def patch_manifest(decoded_dir):
 
     activity = (
         '<activity android:name="app.morphe.extension.admobile.CredentialsActivity" '
-        'android:label="AdMobile credentials" android:exported="true" '
-        'android:launchMode="singleTask">'
-        "<intent-filter>"
-        '<action android:name="android.intent.action.MAIN"/>'
-        '<category android:name="android.intent.category.LAUNCHER"/>'
-        "</intent-filter>"
-        "</activity>"
+        'android:label="AdMobile credentials" android:exported="false"/>'
     )
 
     source, count = re.subn(r"</application>", activity + "</application>", source, count=1)
@@ -243,10 +290,11 @@ def main():
     patch_legacy_read(smali_dir)
     patch_constructor(smali_dir)
     add_synthetic_user(smali_dir)
+    patch_sign_in_intent(smali_dir)
     patch_selected_user_query(smali_dir)
     patch_manifest(decoded_dir)
 
-    print("applied 7 edits; now build, inject the extension dex, and sign")
+    print("applied 8 edits; now build, inject the extension dex, and sign")
 
 
 if __name__ == "__main__":

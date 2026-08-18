@@ -95,10 +95,14 @@ Note that the client secret never ships in the APK: the app downloads it from th
 Firestore *after* a successful Firebase sign-in, along with the Play public key. That is why
 injecting only a refresh token cannot work, and why the patch takes your own OAuth client instead.
 
-The values are entered in the app, in a form the patch adds as a second launcher entry named
-**AdMobile credentials**. They live in the app's private preferences, so nothing is compiled into
-the APK: a patched build carries no secret and one build works for anybody. Until they are filled
-in, every hook falls through and the app behaves exactly as it did before patching.
+The values are entered in the app. While nothing is stored, the launch screen's **Sign in** button
+opens the credentials form instead of the Google flow, so setup is one tap from the screen a fresh
+install already lands on — there is no second launcher icon and the app's navigation is untouched.
+Saving restarts the app, which is all it takes for the account to be picked up.
+
+They live in the app's private preferences, so nothing is compiled into the APK: a patched build
+carries no secret and one build works for anybody. Until they are filled in, every hook falls
+through and the app behaves exactly as it did before patching.
 
 ### What you need
 
@@ -109,7 +113,7 @@ in, every hook falls through and the app behaves exactly as it did before patchi
    obtained by running the consent flow once with `access_type=offline`.
 5. Your AdMob publisher id (`pub-…`).
 
-Open **AdMobile credentials**, paste them in, save, then start AdMobile.
+Open AdMobile, tap **Sign in**, paste them into the form, and save.
 
 ### Without the Morphe toolchain
 

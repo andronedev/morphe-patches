@@ -61,6 +61,9 @@ internal object Constants {
 
     const val APPLICATION_CLASS_DESCRIPTOR = "Lio/stark/admob/App;"
 
+    /** Named in the navigation graph, so R8 keeps it. */
+    const val LAUNCH_FRAGMENT_CLASS_DESCRIPTOR = "Lio/stark/admob/ui/launch/LaunchFragment;"
+
     const val CREDENTIALS_CLASS_DESCRIPTOR = "Lapp/morphe/extension/admobile/Credentials;"
     const val CREDENTIALS_ACTIVITY_CLASS_NAME = "app.morphe.extension.admobile.CredentialsActivity"
     const val CREDENTIALS_ACTIVITY_LABEL = "AdMobile credentials"

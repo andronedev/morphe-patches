@@ -2,6 +2,7 @@ package app.morphe.patches.admobile.auth
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
+import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.instructions
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.bytecodePatch
@@ -18,6 +19,7 @@ import app.morphe.util.indexOfFirstStringInstructionOrThrow
 import app.morphe.util.setExtensionIsPatchIncluded
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
+import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.immutable.ImmutableMethod
 import com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation
@@ -94,7 +96,32 @@ val customCredentialsPatch = bytecodePatch(
             """,
         )
 
-        // 4. checkUser() sends the app to the login screen when the user DAO reports no selected
+        // 4. The launch screen's sign in button opens the form while nothing is configured, so the
+        //    setup is one tap from the screen a fresh install already lands on. Once credentials
+        //    exist the account is served locally and the button is never reached again.
+        val signInIntentMethod = SignInIntentFingerprint.method
+        val signInIntentIndex = signInIntentMethod.instructions.indexOfFirst { instruction ->
+            val reference = instruction.getReference<MethodReference>()
+
+            reference?.returnType == "Landroid/content/Intent;" && reference.parameterTypes.isEmpty()
+        }
+        if (signInIntentIndex < 0) {
+            throw PatchException("Could not find the sign-in intent call.")
+        }
+
+        val signInIntentRegister = signInIntentMethod
+            .getInstruction<OneRegisterInstruction>(signInIntentIndex + 1)
+            .registerA
+
+        signInIntentMethod.addInstructions(
+            signInIntentIndex + 2,
+            """
+                invoke-static { v$signInIntentRegister }, $CREDENTIALS_CLASS_DESCRIPTOR->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
+                move-result-object v$signInIntentRegister
+            """,
+        )
+
+        // 5. checkUser() sends the app to the login screen when the user DAO reports no selected
         //    account, so that query hands back a fabricated one. The DAO carries no strings of its
         //    own and is identified by the call checkUser() makes just before logging the result.
         val checkUserMethod = CheckUserFingerprint.method
@@ -120,7 +147,7 @@ val customCredentialsPatch = bytecodePatch(
             ?.getReference<MethodReference>()
             ?: throw PatchException("Could not find the selected account query in checkUser().")
 
-        // 5. The account itself. Its constructor takes the columns in schema order: id, sign_id,
+        // 6. The account itself. Its constructor takes the columns in schema order: id, sign_id,
         //    fire_id, email, name, avatar, time_zone, currency and the selected flag. The three id
         //    columns share the publisher id because the only thing derived from the account id is
         //    the refresh token key, which step 1 answers for any id. The factory lives on the entity

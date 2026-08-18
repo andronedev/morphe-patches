@@ -56,6 +56,35 @@ public final class Credentials {
         return false;
     }
 
+    /**
+     * OAuth client the in-app sign in runs against. Both are replaced by the patch when the
+     * clientId and clientSecret options are set, which is what lets a build sign in with no setup
+     * at all. Left empty, the form asks for a client instead.
+     */
+    public static String bundledClientId() {
+        return "";
+    }
+
+    public static String bundledClientSecret() {
+        return "";
+    }
+
+    /** The client to sign in with: the one already stored, else the one built into the patch. */
+    public static String effectiveClientId() {
+        String stored = get(KEY_CLIENT_ID);
+        return stored.isEmpty() ? bundledClientId() : stored;
+    }
+
+    public static String effectiveClientSecret() {
+        String stored = get(KEY_CLIENT_SECRET);
+        return stored.isEmpty() ? bundledClientSecret() : stored;
+    }
+
+    /** True when sign in can run without the user supplying a client first. */
+    public static boolean hasClient() {
+        return !effectiveClientId().isEmpty() && !effectiveClientSecret().isEmpty();
+    }
+
     /** Called from the patched {@code Application.onCreate}. */
     public static void init(Context applicationContext) {
         context = applicationContext.getApplicationContext();
@@ -86,8 +115,7 @@ public final class Credentials {
 
     /** True once the four values the token requests need are present. */
     public static boolean isConfigured() {
-        return !get(KEY_CLIENT_ID).isEmpty()
-                && !get(KEY_CLIENT_SECRET).isEmpty()
+        return hasClient()
                 && !get(KEY_REFRESH_TOKEN).isEmpty()
                 && !get(KEY_PUBLISHER_ID).isEmpty();
     }
@@ -100,7 +128,7 @@ public final class Credentials {
     public static String forDataStoreKey(String name) {
         if (name == null || !isConfigured()) return null;
 
-        if (DATA_STORE_CLIENT_SECRET.equals(name)) return get(KEY_CLIENT_SECRET);
+        if (DATA_STORE_CLIENT_SECRET.equals(name)) return effectiveClientSecret();
         if (DATA_STORE_PUBLISHER_ID.equals(name)) return get(KEY_PUBLISHER_ID);
         if (name.startsWith(DATA_STORE_REFRESH_TOKEN_PREFIX)) return get(KEY_REFRESH_TOKEN);
 
@@ -121,7 +149,7 @@ public final class Credentials {
      * @param original the value the app was built with.
      */
     public static String clientIdOrOriginal(String original) {
-        String clientId = get(KEY_CLIENT_ID);
+        String clientId = effectiveClientId();
         return clientId.isEmpty() ? original : clientId;
     }
 

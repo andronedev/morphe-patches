@@ -17,11 +17,13 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Form for the values in {@link Credentials}.
+ * Sign in screen for the patched app.
  *
- * <p>Opened by the app's own sign in button while no credentials are stored, so the setup is one
- * tap from the screen the user already lands on. Saving restarts the app, which is enough for the
- * account to be picked up.
+ * <p>Opened by the app's own sign in button while no credentials are stored, so setup is one tap
+ * from the screen the user already lands on. When the patch was built with an OAuth client, the
+ * whole flow is a single button: the browser handles the consent and everything else, publisher id
+ * included, is read back from Google. The manual fields stay available for builds without a
+ * bundled client, or to paste a token obtained elsewhere.
  *
  * <p>Built in code rather than from a layout so the patch adds no resources: it only has to declare
  * the activity in the manifest, and there are no ids to keep in step with the host app.
@@ -46,6 +48,10 @@ public final class CredentialsActivity extends Activity {
 
     private final EditText[] inputs = new EditText[FIELDS.length];
 
+    private Button signIn;
+    private LinearLayout manualSection;
+    private TextView manualToggle;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -60,13 +66,56 @@ public final class CredentialsActivity extends Activity {
 
         form.addView(text("Connect your AdMob account", ACCENT, 22, Gravity.CENTER_HORIZONTAL, 0, 0));
         form.addView(text(
-                "This build reads your AdMob reports with your own Google API credentials, so it "
-                        + "does not need the Google sign in that a re-signed app cannot complete.",
+                "This build reads your reports with Google API credentials of its own, so it does "
+                        + "not need the Google sign in that a re-signed app cannot complete.",
                 MUTED, 13, Gravity.NO_GRAVITY, dp(10), 0));
-        form.addView(text(
-                "Create a Desktop OAuth client in Google Cloud with the AdMob API enabled, then "
-                        + "authorise it once for the admob.readonly scope to get a refresh token.",
-                MUTED, 13, Gravity.NO_GRAVITY, dp(8), dp(4)));
+
+        boolean bundledClient = Credentials.hasClient();
+
+        signIn = new Button(this);
+        signIn.setText("Sign in with Google");
+        signIn.setAllCaps(false);
+        signIn.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                startSignIn();
+            }
+        });
+        form.addView(signIn, marginTop(dp(24)));
+
+        if (!bundledClient) {
+            form.addView(text(
+                    "No OAuth client is built into this patch. Fill the client id and secret in "
+                            + "below first, then sign in — or paste a refresh token directly.",
+                    MUTED, 12, Gravity.NO_GRAVITY, dp(10), 0));
+        }
+
+        manualToggle = text("Enter the values manually", ACCENT, 13, Gravity.CENTER_HORIZONTAL,
+                dp(20), dp(4));
+        manualToggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                boolean showing = manualSection.getVisibility() == View.VISIBLE;
+                manualSection.setVisibility(showing ? View.GONE : View.VISIBLE);
+                manualToggle.setText(showing ? "Enter the values manually" : "Hide the fields");
+            }
+        });
+        form.addView(manualToggle);
+
+        manualSection = buildManualSection();
+        manualSection.setVisibility(bundledClient ? View.GONE : View.VISIBLE);
+        form.addView(manualSection);
+
+        ScrollView root = new ScrollView(this);
+        root.setBackgroundColor(BACKGROUND);
+        root.addView(form);
+
+        setContentView(root);
+    }
+
+    private LinearLayout buildManualSection() {
+        LinearLayout section = new LinearLayout(this);
+        section.setOrientation(LinearLayout.VERTICAL);
 
         boolean optionalHeadingAdded = false;
         for (int i = 0; i < FIELDS.length; i++) {
@@ -74,13 +123,11 @@ public final class CredentialsActivity extends Activity {
             boolean required = !field[3].isEmpty();
 
             if (!required && !optionalHeadingAdded) {
-                form.addView(text("Optional", ACCENT, 15, Gravity.NO_GRAVITY, dp(28), 0));
+                section.addView(text("Optional", ACCENT, 15, Gravity.NO_GRAVITY, dp(24), 0));
                 optionalHeadingAdded = true;
-            } else if (required && i == 0) {
-                form.addView(text("Required", ACCENT, 15, Gravity.NO_GRAVITY, dp(24), 0));
             }
 
-            form.addView(text(field[1], Color.WHITE, 13, Gravity.NO_GRAVITY, dp(14), 0));
+            section.addView(text(field[1], Color.WHITE, 13, Gravity.NO_GRAVITY, dp(14), 0));
 
             EditText input = new EditText(this);
             input.setSingleLine(true);
@@ -90,7 +137,7 @@ public final class CredentialsActivity extends Activity {
             input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
             input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
             input.setText(Credentials.get(field[0]));
-            form.addView(input);
+            section.addView(input);
 
             inputs[i] = input;
         }
@@ -104,30 +151,53 @@ public final class CredentialsActivity extends Activity {
                 save();
             }
         });
+        section.addView(save, marginTop(dp(24)));
 
-        LinearLayout.LayoutParams saveParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        saveParams.topMargin = dp(28);
-        form.addView(save, saveParams);
+        return section;
+    }
 
-        ScrollView root = new ScrollView(this);
-        root.setBackgroundColor(BACKGROUND);
-        root.addView(form);
+    /** Persists whatever is typed first, so a client entered by hand is available to the flow. */
+    private void startSignIn() {
+        if (manualSection.getVisibility() == View.VISIBLE) persist();
 
-        setContentView(root);
+        if (!Credentials.hasClient()) {
+            Toast.makeText(this, "An OAuth client id and secret are needed first.",
+                    Toast.LENGTH_LONG).show();
+            manualSection.setVisibility(View.VISIBLE);
+            return;
+        }
+
+        signIn.setEnabled(false);
+        signIn.setText("Waiting for the browser…");
+
+        OAuthFlow.start(this, Credentials.effectiveClientId(), Credentials.effectiveClientSecret(),
+                new OAuthFlow.Callback() {
+                    @Override
+                    public void onFinished(boolean success, String message) {
+                        signIn.setEnabled(true);
+                        signIn.setText("Sign in with Google");
+
+                        Toast.makeText(CredentialsActivity.this, message, Toast.LENGTH_LONG).show();
+                        if (success) restartApp();
+                    }
+                });
+    }
+
+    private void persist() {
+        for (int i = 0; i < FIELDS.length; i++) {
+            Credentials.put(FIELDS[i][0], inputs[i].getText().toString());
+        }
     }
 
     private void save() {
+        persist();
+
         StringBuilder missing = new StringBuilder();
+        for (String[] field : FIELDS) {
+            if (field[3].isEmpty() || !Credentials.get(field[0]).isEmpty()) continue;
 
-        for (int i = 0; i < FIELDS.length; i++) {
-            String value = inputs[i].getText().toString().trim();
-            Credentials.put(FIELDS[i][0], value);
-
-            if (!FIELDS[i][3].isEmpty() && value.isEmpty()) {
-                if (missing.length() > 0) missing.append(", ");
-                missing.append(FIELDS[i][1]);
-            }
+            if (missing.length() > 0) missing.append(", ");
+            missing.append(field[1]);
         }
 
         if (missing.length() > 0) {
@@ -151,6 +221,13 @@ public final class CredentialsActivity extends Activity {
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(launch);
         finish();
+    }
+
+    private LinearLayout.LayoutParams marginTop(int margin) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.topMargin = margin;
+        return params;
     }
 
     private TextView text(String content, int color, int sizeSp, int gravity, int topDp, int bottomDp) {

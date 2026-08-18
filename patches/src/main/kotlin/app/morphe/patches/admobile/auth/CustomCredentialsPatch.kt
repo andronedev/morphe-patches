@@ -5,7 +5,9 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLa
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.instructions
 import app.morphe.patcher.patch.PatchException
+import app.morphe.patcher.patch.BytecodePatchContext
 import app.morphe.patcher.patch.bytecodePatch
+import app.morphe.patcher.patch.stringOption
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod.Companion.toMutable
 import app.morphe.patches.admobile.Constants.APPLICATION_CLASS_DESCRIPTOR
 import app.morphe.patches.admobile.Constants.CHECK_USER_LOG_PREFIX
@@ -16,6 +18,7 @@ import app.morphe.patches.admobile.Constants.SYNTHETIC_USER_METHOD_NAME
 import app.morphe.patches.admobile.Constants.USER_CLASS_DESCRIPTOR
 import app.morphe.util.getReference
 import app.morphe.util.indexOfFirstStringInstructionOrThrow
+import app.morphe.util.returnEarly
 import app.morphe.util.setExtensionIsPatchIncluded
 import com.android.tools.smali.dexlib2.AccessFlags
 import com.android.tools.smali.dexlib2.Opcode
@@ -23,6 +26,17 @@ import com.android.tools.smali.dexlib2.iface.instruction.OneRegisterInstruction
 import com.android.tools.smali.dexlib2.iface.reference.MethodReference
 import com.android.tools.smali.dexlib2.immutable.ImmutableMethod
 import com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation
+
+/**
+ * Resolves one of the extension's bundled-client getters, which the patch rewrites to return the
+ * value the build was given.
+ */
+context(BytecodePatchContext)
+private fun bundledClientMethod(name: String) =
+    mutableClassDefByOrNull(CREDENTIALS_CLASS_DESCRIPTOR)
+        ?.methods
+        ?.firstOrNull { it.name == name && it.parameters.isEmpty() }
+        ?: throw PatchException("Could not find $CREDENTIALS_CLASS_DESCRIPTOR->$name.")
 
 @Suppress("unused")
 val customCredentialsPatch = bytecodePatch(
@@ -36,7 +50,37 @@ val customCredentialsPatch = bytecodePatch(
 
     extendWith("extensions/admobile.mpe")
 
+    val clientIdOption = stringOption(
+        key = "clientId",
+        default = "",
+        title = "OAuth client id",
+        description = "Desktop OAuth client to sign in with. Leave empty to be asked in the app.",
+        required = false,
+    )
+
+    val clientSecretOption = stringOption(
+        key = "clientSecret",
+        default = "",
+        title = "OAuth client secret",
+        description = "Secret of that client. Leave empty to be asked in the app.",
+        required = false,
+    )
+
     execute {
+        // Built into the extension so signing in is a single tap with nothing to paste. Both are
+        // left empty by default, in which case the form asks for a client instead.
+        val clientId = clientIdOption.value?.trim().orEmpty()
+        val clientSecret = clientSecretOption.value?.trim().orEmpty()
+
+        if (clientId.isNotEmpty() != clientSecret.isNotEmpty()) {
+            throw PatchException("Set both 'clientId' and 'clientSecret', or neither.")
+        }
+
+        if (clientId.isNotEmpty()) {
+            bundledClientMethod("bundledClientId").returnEarly(clientId)
+            bundledClientMethod("bundledClientSecret").returnEarly(clientSecret)
+        }
+
         // The form writes to the app's private preferences, so the extension needs a context before
         // anything reads a credential. Application.onCreate runs first and its class is named in the
         // manifest, so R8 keeps it.

@@ -41,6 +41,17 @@ public final class Credentials {
      */
     public static final String KEY_LAST_STATUS = "last_status";
 
+    /**
+     * Authorization code captured from the redirect, held until the app is back in the foreground.
+     *
+     * <p>The exchange is not done as soon as the code arrives: the browser owns the screen at that
+     * moment, and several vendor builds cut background apps off the network, which surfaces as a
+     * DNS failure on the token endpoint. Waiting until the form resumes avoids that entirely.
+     */
+    public static final String KEY_PENDING_CODE = "pending_code";
+    public static final String KEY_PENDING_VERIFIER = "pending_verifier";
+    public static final String KEY_PENDING_REDIRECT = "pending_redirect";
+
     /** Names the app looks up in its encrypted DataStore. */
     private static final String DATA_STORE_CLIENT_SECRET = "web_client_secret";
     private static final String DATA_STORE_PUBLISHER_ID = "user_pub_id";

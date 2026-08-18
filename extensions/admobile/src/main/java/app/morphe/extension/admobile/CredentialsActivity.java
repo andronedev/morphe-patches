@@ -141,8 +141,32 @@ public final class CredentialsActivity extends Activity {
         status.setText(last);
         status.setVisibility(last.isEmpty() ? View.GONE : View.VISIBLE);
 
+        // The browser has handed the code back and the app is in the foreground again, which is
+        // exactly when the exchange can reach the network.
+        if (OAuthFlow.hasPendingCode()) {
+            signIn.setEnabled(false);
+            signIn.setText("Finishing…");
+            OAuthFlow.completePending(this, signInCallback());
+            return;
+        }
+
         signIn.setEnabled(true);
         signIn.setText("Sign in with Google");
+    }
+
+    private OAuthFlow.Callback signInCallback() {
+        return new OAuthFlow.Callback() {
+            @Override
+            public void onFinished(boolean success, String message) {
+                signIn.setEnabled(true);
+                signIn.setText("Sign in with Google");
+
+                status.setText(message);
+                status.setVisibility(View.VISIBLE);
+
+                if (success) restartApp();
+            }
+        };
     }
 
     private LinearLayout buildManualSection() {
@@ -195,18 +219,7 @@ public final class CredentialsActivity extends Activity {
         signIn.setText("Waiting for the browser…");
 
         OAuthFlow.start(this, Credentials.effectiveClientId(), Credentials.effectiveClientSecret(),
-                new OAuthFlow.Callback() {
-                    @Override
-                    public void onFinished(boolean success, String message) {
-                        signIn.setEnabled(true);
-                        signIn.setText("Sign in with Google");
-
-                        status.setText(message);
-                        status.setVisibility(View.VISIBLE);
-
-                        if (success) restartApp();
-                    }
-                });
+                signInCallback());
     }
 
     private void persist() {

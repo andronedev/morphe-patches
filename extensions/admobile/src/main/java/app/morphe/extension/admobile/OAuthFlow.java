@@ -17,6 +17,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 
@@ -30,6 +31,11 @@ import java.security.SecureRandom;
  *
  * <p>Loopback rather than a custom scheme keeps the redirect out of the manifest, so the patch does
  * not have to know the client id at build time to declare an intent filter for it.
+ *
+ * <p>The flow runs in two halves. {@link #start} captures the code while the browser holds the
+ * screen; {@link #completePending} does the network exchange once the form is back in the
+ * foreground. They are split because several vendor builds cut background apps off the network,
+ * which shows up as the token endpoint failing to resolve.
  *
  * <p>PKCE is used as Google requires for installed apps. The client secret a Desktop client is
  * issued is sent with the exchange; Google does not treat it as confidential for this client type.
@@ -47,11 +53,15 @@ public final class OAuthFlow {
             "https://www.googleapis.com/auth/admob.readonly"
                     + " https://www.googleapis.com/auth/adsense.readonly";
 
+    /** Connectivity can lag a moment behind the app returning to the foreground. */
+    private static final int NETWORK_ATTEMPTS = 4;
+    private static final long RETRY_DELAY_MS = 1500L;
+
     private static final String REDIRECT_RESPONSE =
             "HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nConnection: close\r\n\r\n"
                     + "<!doctype html><meta charset=\"utf-8\">"
                     + "<body style=\"font-family:system-ui;background:#121212;color:#e0e0e0;padding:3rem\">"
-                    + "<h2 style=\"color:#f0c040\">Connected</h2><p>Back to AdMobile.</p>";
+                    + "<h2 style=\"color:#f0c040\">Authorised</h2><p>Back to AdMobile.</p>";
 
     /** Reported on the main thread once the flow ends, one way or the other. */
     public interface Callback {
@@ -61,11 +71,20 @@ public final class OAuthFlow {
     private OAuthFlow() {
     }
 
-    public static void start(Activity activity, String clientId, String clientSecret, Callback callback) {
-        new Thread(() -> run(activity, clientId, clientSecret, callback)).start();
+    /** True once the redirect has been captured and only the exchange is left to do. */
+    public static boolean hasPendingCode() {
+        return !Credentials.get(Credentials.KEY_PENDING_CODE).isEmpty();
     }
 
-    private static void run(Activity activity, String clientId, String clientSecret, Callback callback) {
+    /**
+     * Opens the consent screen and captures the redirect. The exchange itself is left to
+     * {@link #completePending}, which the form calls when it comes back to the foreground.
+     */
+    public static void start(Activity activity, String clientId, String clientSecret, Callback callback) {
+        new Thread(() -> authorize(activity, clientId, clientSecret, callback)).start();
+    }
+
+    private static void authorize(Activity activity, String clientId, String clientSecret, Callback callback) {
         ServerSocket server = null;
 
         try {
@@ -76,22 +95,51 @@ public final class OAuthFlow {
             String redirectUri = "http://127.0.0.1:" + server.getLocalPort();
             String verifier = randomVerifier();
 
+            Credentials.put(Credentials.KEY_CLIENT_ID, clientId);
+            Credentials.put(Credentials.KEY_CLIENT_SECRET, clientSecret);
+            Credentials.put(Credentials.KEY_PENDING_VERIFIER, verifier);
+            Credentials.put(Credentials.KEY_PENDING_REDIRECT, redirectUri);
+
             activity.startActivity(new Intent(Intent.ACTION_VIEW,
                     Uri.parse(authorizationUrl(clientId, redirectUri, verifier))));
 
             String code = awaitCode(activity, server);
+
             if (code == null) {
-                finish(activity, callback, false, "No authorisation code came back.");
+                report(activity, callback, false, "No authorisation code came back.");
                 return;
             }
 
+            Credentials.put(Credentials.KEY_PENDING_CODE, code);
+            Credentials.put(Credentials.KEY_LAST_STATUS, "Authorised, finishing…");
+        } catch (Exception exception) {
+            Log.e(TAG, "authorisation failed", exception);
+            report(activity, callback, false, "Sign in failed: " + exception.getMessage());
+        } finally {
+            close(server);
+        }
+    }
+
+    /**
+     * Exchanges the captured code and reads the account back. Called with the app in the
+     * foreground, where its network is available.
+     */
+    public static void completePending(Activity activity, Callback callback) {
+        new Thread(() -> exchange(activity, callback)).start();
+    }
+
+    private static void exchange(Activity activity, Callback callback) {
+        String code = Credentials.get(Credentials.KEY_PENDING_CODE);
+        if (code.isEmpty()) return;
+
+        try {
             String tokenResponse = postForm(TOKEN_ENDPOINT,
-                    "client_id=" + encode(clientId)
-                            + "&client_secret=" + encode(clientSecret)
+                    "client_id=" + encode(Credentials.effectiveClientId())
+                            + "&client_secret=" + encode(Credentials.effectiveClientSecret())
                             + "&code=" + encode(code)
-                            + "&code_verifier=" + encode(verifier)
+                            + "&code_verifier=" + encode(Credentials.get(Credentials.KEY_PENDING_VERIFIER))
                             + "&grant_type=authorization_code"
-                            + "&redirect_uri=" + encode(redirectUri));
+                            + "&redirect_uri=" + encode(Credentials.get(Credentials.KEY_PENDING_REDIRECT)));
 
             String refreshToken = jsonString(tokenResponse, "refresh_token");
             String accessToken = jsonString(tokenResponse, "access_token");
@@ -101,15 +149,14 @@ public final class OAuthFlow {
                 String detail = jsonString(tokenResponse, "error_description");
                 if (detail == null) detail = jsonString(tokenResponse, "error");
 
-                finish(activity, callback, false, detail != null
+                clearPending();
+                report(activity, callback, false, detail != null
                         ? "Token exchange refused: " + detail
                         : "Google returned no refresh token. Revoke the app at "
                                 + "myaccount.google.com/permissions and try again.");
                 return;
             }
 
-            Credentials.put(Credentials.KEY_CLIENT_ID, clientId);
-            Credentials.put(Credentials.KEY_CLIENT_SECRET, clientSecret);
             Credentials.put(Credentials.KEY_REFRESH_TOKEN, refreshToken);
 
             // The AdMob API names the account holding the token, so the publisher id, currency and
@@ -121,19 +168,27 @@ public final class OAuthFlow {
                 store(Credentials.KEY_TIME_ZONE, jsonString(accounts, "reportingTimeZone"));
             }
 
+            clearPending();
+
             if (Credentials.get(Credentials.KEY_PUBLISHER_ID).isEmpty()) {
-                finish(activity, callback, false,
+                report(activity, callback, false,
                         "Signed in, but no AdMob account is linked to this Google account.");
                 return;
             }
 
-            finish(activity, callback, true, "Connected.");
+            report(activity, callback, true, "Connected.");
         } catch (Exception exception) {
-            Log.e(TAG, "sign in failed", exception);
-            finish(activity, callback, false, "Sign in failed: " + exception.getMessage());
-        } finally {
-            close(server);
+            Log.e(TAG, "token exchange failed", exception);
+            // The code is left in place: it stays usable for a few minutes, so simply returning to
+            // this screen with a working connection is enough to finish.
+            report(activity, callback, false, "Sign in failed: " + exception.getMessage());
         }
+    }
+
+    private static void clearPending() {
+        Credentials.put(Credentials.KEY_PENDING_CODE, "");
+        Credentials.put(Credentials.KEY_PENDING_VERIFIER, "");
+        Credentials.put(Credentials.KEY_PENDING_REDIRECT, "");
     }
 
     private static String authorizationUrl(String clientId, String redirectUri, String verifier)
@@ -163,9 +218,8 @@ public final class OAuthFlow {
             output.write(REDIRECT_RESPONSE.getBytes("UTF-8"));
             output.flush();
 
-            // The browser is in the foreground at this point. Pull the app back up so the outcome
-            // lands on a live activity rather than one the system may have torn down, and so the
-            // user does not have to find their way back by hand.
+            // The browser is in the foreground at this point. Pull the app back up: the exchange
+            // needs the network, which vendor builds grant only to foreground apps.
             activity.startActivity(new Intent(activity, CredentialsActivity.class)
                     .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
                             | Intent.FLAG_ACTIVITY_SINGLE_TOP));
@@ -190,7 +244,9 @@ public final class OAuthFlow {
         if (query < 0) return null;
 
         int end = requestLine.indexOf(' ', query);
-        String parameters = end < 0 ? requestLine.substring(query + 1) : requestLine.substring(query + 1, end);
+        String parameters = end < 0
+                ? requestLine.substring(query + 1)
+                : requestLine.substring(query + 1, end);
 
         for (String parameter : parameters.split("&")) {
             int separator = parameter.indexOf('=');
@@ -221,22 +277,33 @@ public final class OAuthFlow {
     }
 
     private static String postForm(String endpoint, String body) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
+        Exception last = null;
 
-        try {
-            connection.setRequestMethod("POST");
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
+        for (int attempt = 0; attempt < NETWORK_ATTEMPTS; attempt++) {
+            HttpURLConnection connection = (HttpURLConnection) new URL(endpoint).openConnection();
 
-            DataOutputStream output = new DataOutputStream(connection.getOutputStream());
-            output.write(body.getBytes("UTF-8"));
-            output.flush();
-            output.close();
+            try {
+                connection.setRequestMethod("POST");
+                connection.setDoOutput(true);
+                connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
 
-            return read(connection);
-        } finally {
-            connection.disconnect();
+                DataOutputStream output = new DataOutputStream(connection.getOutputStream());
+                output.write(body.getBytes("UTF-8"));
+                output.flush();
+                output.close();
+
+                return read(connection);
+            } catch (UnknownHostException exception) {
+                // Connectivity is often still settling right after the app returns to the front.
+                last = exception;
+                Log.w(TAG, "no route to " + endpoint + ", retrying");
+                Thread.sleep(RETRY_DELAY_MS);
+            } finally {
+                connection.disconnect();
+            }
         }
+
+        throw last;
     }
 
     private static String get(String endpoint, String accessToken) {
@@ -275,8 +342,8 @@ public final class OAuthFlow {
     /**
      * Pulls one string value out of a JSON body.
      *
-     * <p>Only flat string fields are needed here, and org.json is part of the platform but pulling
-     * a value out of a known response shape does not warrant parsing the whole document.
+     * <p>Only flat string fields are needed here, out of responses of a known shape, which does not
+     * warrant parsing the whole document.
      */
     private static String jsonString(String json, String name) {
         if (json == null) return null;
@@ -298,7 +365,7 @@ public final class OAuthFlow {
         if (value != null && !value.isEmpty()) Credentials.put(key, value);
     }
 
-    private static void finish(Activity activity, Callback callback, boolean success, String message) {
+    private static void report(Activity activity, Callback callback, boolean success, String message) {
         // Recorded before the callback, so the outcome is still readable if the form was torn down
         // while the browser held the foreground.
         Credentials.put(Credentials.KEY_LAST_STATUS, message);

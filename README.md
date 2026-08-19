@@ -106,11 +106,16 @@ through and the app behaves exactly as it did before patching.
 
 ### What you need
 
-1. A Google Cloud project with the **AdMob API** enabled.
+1. A Google Cloud project with the **AdMob API** enabled, and the **AdSense Management API**
+   alongside it — the reports come from the first, the payments card on the profile screen from the
+   second. Leaving the second one off is not fatal: everything else works, and the profile screen
+   shows Google's own "has not been used in project … or it is disabled" error.
 2. An OAuth consent screen (External, Testing) with your own account added as a test user.
 3. An OAuth client of type **Desktop**, which gives you a client id and a client secret.
-4. A refresh token for that client on the `https://www.googleapis.com/auth/admob.readonly` scope,
-   obtained by running the consent flow once with `access_type=offline`.
+4. A refresh token for that client on the `https://www.googleapis.com/auth/admob.readonly` and
+   `https://www.googleapis.com/auth/adsense.readonly` scopes, obtained by running the consent flow
+   once with `access_type=offline`. The form does this for you; the scopes matter only if you get
+   the token some other way.
 5. Your AdMob publisher id (`pub-…`).
 
 Open AdMobile, tap **Sign in**, paste them into the form, and save.

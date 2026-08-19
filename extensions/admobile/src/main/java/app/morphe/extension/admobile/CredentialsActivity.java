@@ -179,7 +179,8 @@ public final class CredentialsActivity extends Activity {
     /** The console is only usable on a desktop browser, so the steps are worded to be followed there. */
     private static final String[] GUIDE = {
             "Open console.cloud.google.com and create a project.",
-            "APIs & Services → Library → search AdMob API → Enable.",
+            "APIs & Services → Library → Enable the AdMob API, then the AdSense "
+                    + "Management API — that second one fills the payments card.",
             "APIs & Services → OAuth consent screen → External → add your own Google address "
                     + "under Test users.",
             "Credentials → Create credentials → OAuth client ID → Application type: Desktop app.",

@@ -11,7 +11,26 @@
       "compatiblePackages": {
         "io.stark.admob": null
       },
-      "options": []
+      "options": [
+        {
+          "key": "clientId",
+          "title": "OAuth client id",
+          "description": "Desktop OAuth client to sign in with. Leave empty to be asked in the app.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        },
+        {
+          "key": "clientSecret",
+          "title": "OAuth client secret",
+          "description": "Secret of that client. Leave empty to be asked in the app.",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        }
+      ]
     },
     {
       "name": "Custom Maps API Key",
@@ -67,7 +86,9 @@
       "name": "Pro Unlock",
       "description": "Unlock all pro features in AdMobile.",
       "use": true,
-      "dependencies": [],
+      "dependencies": [
+        "Pro Badge"
+      ],
       "compatiblePackages": {
         "io.stark.admob": null
       },

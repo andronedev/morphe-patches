@@ -40,24 +40,18 @@ internal object Constants {
 
     const val VERIFY_APP_PURCHASE_EXCEPTION_LOG = "verifyAppPurchase Exception: "
 
-    /**
-     * `androidx.datastore.preferences.core.Preferences.Key`. Its single field holds the key name,
-     * which is what the app store's reader switches on.
-     */
-    const val PREFERENCES_KEY_CLASS_DESCRIPTOR = "Ll1/d;"
-
     const val USER_CLASS_DESCRIPTOR = "Lio/stark/admob/model/entity/User;"
 
     /**
-     * Names of the encrypted values the OAuth code path reads back out of the app store.
-     * `token_refresh_` is a prefix: the account id is appended to it.
+     * Two of the names the app store keeps its encrypted values under. They identify that store
+     * through obfuscation: the settings store below has the same shape, and only the key names,
+     * which are string constants, tell the two apart.
      */
     const val WEB_CLIENT_SECRET_KEY = "web_client_secret"
     const val USER_PUB_ID_KEY = "user_pub_id"
-    const val REFRESH_TOKEN_KEY_PREFIX = "token_refresh_"
 
-    /** Pre-DataStore location of the refresh token, still read by the OkHttp authenticators. */
-    const val LEGACY_REFRESH_TOKEN_KEY = "user_token_refresh"
+    /** The currency symbol every amount is prefixed with, and the settings store's marker. */
+    const val CURRENCY_CODE_SETTING_KEY = "config_currency_code"
 
     const val APPLICATION_CLASS_DESCRIPTOR = "Lio/stark/admob/App;"
 

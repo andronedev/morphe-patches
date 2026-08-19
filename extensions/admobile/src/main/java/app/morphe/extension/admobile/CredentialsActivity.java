@@ -24,7 +24,7 @@ import android.widget.Toast;
  * client once, then connect an account with it.
  *
  * <p>Reached from the app's own sign in and add account buttons, both of which the patch redirects
- * here — so it stays available once signed in, which is where disconnecting lives. The app's own
+ * here, so it stays available once signed in, which is where disconnecting lives. The app's own
  * sign out cannot work on its own: the account it would forget is served from {@link Credentials}
  * rather than from its database.
  *
@@ -53,7 +53,7 @@ public final class CredentialsActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        Credentials.init(this);
+        Credentials.attach(this);
         resolvePalette();
 
         int padding = dp(24);
@@ -68,7 +68,7 @@ public final class CredentialsActivity extends Activity {
         form.addView(body("This build reads your reports with your own Google API credentials, so "
                 + "it does not need the Google sign in that a re-signed app cannot complete."));
 
-        // Step 1 — the client, entered once and kept.
+        // Step 1: the client, entered once and kept.
         form.addView(step("Step 1", "Your Google API client"));
         form.addView(body("These two values come from a Google Cloud project of your own. It takes "
                 + "a few minutes, once."));
@@ -97,12 +97,12 @@ public final class CredentialsActivity extends Activity {
         clientSecret = field("GOCSPX-…", Credentials.get(Credentials.KEY_CLIENT_SECRET));
         form.addView(clientSecret);
 
-        // Step 2 — the account.
+        // Step 2: the account.
         form.addView(step("Step 2", "Connect your account"));
         form.addView(body("The browser opens on Google's consent screen. Everything else, "
                 + "publisher id included, is read back automatically."));
 
-        action = filledButton("Sign in with Google", new View.OnClickListener() {
+        action = filledButton(actionLabel(), new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startSignIn();
@@ -164,7 +164,7 @@ public final class CredentialsActivity extends Activity {
         boolean connected = Credentials.isConfigured();
 
         action.setEnabled(true);
-        action.setText(connected ? "Reconnect" : "Sign in with Google");
+        action.setText(actionLabel());
         disconnect.setVisibility(connected ? View.VISIBLE : View.GONE);
 
         String last = Credentials.get(Credentials.KEY_LAST_STATUS);
@@ -180,7 +180,7 @@ public final class CredentialsActivity extends Activity {
     private static final String[] GUIDE = {
             "Open console.cloud.google.com and create a project.",
             "APIs & Services → Library → Enable the AdMob API, then the AdSense "
-                    + "Management API — that second one fills the payments card.",
+                    + "Management API, which fills the payments card.",
             "APIs & Services → OAuth consent screen → External → add your own Google address "
                     + "under Test users.",
             "Credentials → Create credentials → OAuth client ID → Application type: Desktop app.",
@@ -251,12 +251,16 @@ public final class CredentialsActivity extends Activity {
         return row;
     }
 
+    private static String actionLabel() {
+        return Credentials.isConfigured() ? "Reconnect" : "Sign in with Google";
+    }
+
     private OAuthFlow.Callback signInCallback() {
         return new OAuthFlow.Callback() {
             @Override
             public void onFinished(boolean success, String message) {
                 action.setEnabled(true);
-                action.setText(Credentials.isConfigured() ? "Reconnect" : "Sign in with Google");
+                action.setText(actionLabel());
 
                 status.setText(message);
                 status.setVisibility(View.VISIBLE);

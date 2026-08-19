@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Replay the calls patched AdMobile makes, to tell credentials apart from app plumbing.
 
-Reads a file of `key=value` lines — the same values the credentials form takes — then walks the
+Reads a file of `key=value` lines, the same values the credentials form takes, then walks the
 chain the app walks: refresh the access token, list the account, list its apps, and generate a
 network report. Each step prints its HTTP status and what came back.
 
@@ -75,7 +75,7 @@ def request(method, url, token=None, body=None, form=None):
 
 def step(label, status, body, limit=600):
     ok = status == 200
-    print(f"\n[{'ok' if ok else 'FAIL'}] {label} — HTTP {status}")
+    print(f"\n[{'ok' if ok else 'FAIL'}] {label}: HTTP {status}")
     print(body[:limit] + ("…" if len(body) > limit else ""))
     return ok
 

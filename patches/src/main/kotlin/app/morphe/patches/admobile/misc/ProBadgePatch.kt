@@ -7,7 +7,10 @@ import app.morphe.patches.admobile.Constants.PREMIUM_ACTIVE_STRING_NAME
 import app.morphe.patches.admobile.Constants.PREMIUM_ACTIVE_STRING_VALUE
 import app.morphe.patches.admobile.Constants.PREMIUM_BUTTON_ID
 import app.morphe.patches.admobile.Constants.PROFILE_LAYOUT_RESOURCE
-import org.w3c.dom.Element
+import app.morphe.util.addResource
+import app.morphe.util.findElementByAttributeValue
+import app.morphe.util.getNode
+import app.morphe.util.resource.StringResource
 
 /**
  * Says so on the profile screen once pro is unlocked.
@@ -28,23 +31,23 @@ internal val proBadgePatch = resourcePatch(
 
     execute {
         document("res/values/strings.xml").use { document ->
-            val resources = document.getElementsByTagName("resources").item(0)
+            val alreadyAdded = document.getElementsByTagName("string")
+                .findElementByAttributeValue("name", PREMIUM_ACTIVE_STRING_NAME) != null
+            if (alreadyAdded) return@use
+
+            val resources = document.getNode("resources")
                 ?: throw PatchException("Could not find the resources element.")
 
-            val string = document.createElement("string")
-            string.setAttribute("name", PREMIUM_ACTIVE_STRING_NAME)
-            string.textContent = PREMIUM_ACTIVE_STRING_VALUE
-
-            resources.appendChild(string)
+            resources.addResource(
+                StringResource(PREMIUM_ACTIVE_STRING_NAME, PREMIUM_ACTIVE_STRING_VALUE),
+            )
         }
 
         document(PROFILE_LAYOUT_RESOURCE).use { document ->
-            val buttons = document.getElementsByTagName("com.google.android.material.button.MaterialButton")
-
-            val premiumButton = (0 until buttons.length)
-                .map { buttons.item(it) as Element }
-                .firstOrNull { it.getAttribute("android:id") == PREMIUM_BUTTON_ID }
-                ?: throw PatchException("Could not find the premium button in $PROFILE_LAYOUT_RESOURCE.")
+            // Located by id rather than by widget class: the id is the part that does not change.
+            val premiumButton = document.getElementsByTagName("*")
+                .findElementByAttributeValue("android:id", PREMIUM_BUTTON_ID)
+                ?: throw PatchException("Could not find $PREMIUM_BUTTON_ID in $PROFILE_LAYOUT_RESOURCE.")
 
             premiumButton.setAttribute("android:text", "@string/$PREMIUM_ACTIVE_STRING_NAME")
         }

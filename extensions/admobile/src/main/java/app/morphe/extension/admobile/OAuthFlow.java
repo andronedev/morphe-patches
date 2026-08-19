@@ -7,7 +7,6 @@ import android.util.Base64;
 import android.util.Log;
 
 import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -47,7 +46,6 @@ public final class OAuthFlow {
     private static final String AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
     private static final String TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
     private static final String ACCOUNTS_ENDPOINT = "https://admob.googleapis.com/v1/accounts";
-    private static final String ADMOB_ACCOUNTS = ACCOUNTS_ENDPOINT;
 
     /** The scopes AdMobile itself requests. */
     private static final String SCOPES =
@@ -117,7 +115,7 @@ public final class OAuthFlow {
             Log.e(TAG, "authorisation failed", exception);
             report(activity, callback, false, "Sign in failed: " + exception.getMessage());
         } finally {
-            close(server);
+            Credentials.closeQuietly(server);
         }
     }
 
@@ -134,13 +132,11 @@ public final class OAuthFlow {
         if (code.isEmpty()) return;
 
         try {
-            String tokenResponse = postForm(TOKEN_ENDPOINT,
-                    "client_id=" + encode(Credentials.effectiveClientId())
-                            + "&client_secret=" + encode(Credentials.effectiveClientSecret())
-                            + "&code=" + encode(code)
+            String tokenResponse = postForm(TOKEN_ENDPOINT, tokenRequest(
+                    "&code=" + encode(code)
                             + "&code_verifier=" + encode(Credentials.get(Credentials.KEY_PENDING_VERIFIER))
                             + "&grant_type=authorization_code"
-                            + "&redirect_uri=" + encode(Credentials.get(Credentials.KEY_PENDING_REDIRECT)));
+                            + "&redirect_uri=" + encode(Credentials.get(Credentials.KEY_PENDING_REDIRECT))));
 
             String refreshToken = jsonString(tokenResponse, "refresh_token");
             String accessToken = jsonString(tokenResponse, "access_token");
@@ -215,11 +211,9 @@ public final class OAuthFlow {
                     .append('\n');
 
             try {
-                String refreshed = postForm(TOKEN_ENDPOINT,
-                        "client_id=" + encode(Credentials.effectiveClientId())
-                                + "&client_secret=" + encode(Credentials.effectiveClientSecret())
-                                + "&refresh_token=" + encode(Credentials.get(Credentials.KEY_REFRESH_TOKEN))
-                                + "&grant_type=refresh_token");
+                String refreshed = postForm(TOKEN_ENDPOINT, tokenRequest(
+                        "&refresh_token=" + encode(Credentials.get(Credentials.KEY_REFRESH_TOKEN))
+                                + "&grant_type=refresh_token"));
 
                 String accessToken = jsonString(refreshed, "access_token");
                 if (accessToken == null) {
@@ -232,7 +226,7 @@ public final class OAuthFlow {
                 report.append("refresh: ok\n");
 
                 String publisher = Credentials.get(Credentials.KEY_PUBLISHER_ID);
-                String apps = get(ADMOB_ACCOUNTS + "/" + publisher + "/apps", accessToken);
+                String apps = get(ACCOUNTS_ENDPOINT + "/" + publisher + "/apps", accessToken);
                 report.append("apps: ").append(apps == null ? "no response" : trim(apps)).append('\n');
             } catch (Exception exception) {
                 report.append("network: ").append(exception).append('\n');
@@ -250,14 +244,20 @@ public final class OAuthFlow {
         activity.runOnUiThread(() -> callback.onFinished(false, text));
     }
 
+    /** Both token requests are signed with the same client; only the grant differs. */
+    private static String tokenRequest(String grant) throws Exception {
+        return "client_id=" + encode(Credentials.effectiveClientId())
+                + "&client_secret=" + encode(Credentials.effectiveClientSecret())
+                + grant;
+    }
+
     private static String trim(String body) {
         return body.length() > 300 ? body.substring(0, 300) + "…" : body;
     }
 
     private static void clearPending() {
-        Credentials.put(Credentials.KEY_PENDING_CODE, "");
-        Credentials.put(Credentials.KEY_PENDING_VERIFIER, "");
-        Credentials.put(Credentials.KEY_PENDING_REDIRECT, "");
+        Credentials.clear(Credentials.KEY_PENDING_CODE, Credentials.KEY_PENDING_VERIFIER,
+                Credentials.KEY_PENDING_REDIRECT);
     }
 
     private static String authorizationUrl(String clientId, String redirectUri, String verifier)
@@ -298,7 +298,7 @@ public final class OAuthFlow {
             Log.i(TAG, "redirect: " + requestLine);
             return queryParameter(requestLine, "code");
         } finally {
-            close(socket);
+            Credentials.closeQuietly(socket);
         }
     }
 
@@ -356,9 +356,8 @@ public final class OAuthFlow {
                 connection.setDoOutput(true);
                 connection.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
 
-                DataOutputStream output = new DataOutputStream(connection.getOutputStream());
+                OutputStream output = connection.getOutputStream();
                 output.write(body.getBytes("UTF-8"));
-                output.flush();
                 output.close();
 
                 return read(connection);
@@ -366,7 +365,7 @@ public final class OAuthFlow {
                 // Connectivity is often still settling right after the app returns to the front.
                 last = exception;
                 Log.w(TAG, "no route to " + endpoint + ", retrying");
-                Thread.sleep(RETRY_DELAY_MS);
+                if (attempt < NETWORK_ATTEMPTS - 1) Thread.sleep(RETRY_DELAY_MS);
             } finally {
                 connection.disconnect();
             }
@@ -441,20 +440,6 @@ public final class OAuthFlow {
         Log.i(TAG, "finished: " + message);
 
         activity.runOnUiThread(() -> callback.onFinished(success, message));
-    }
-
-    private static void close(ServerSocket server) {
-        try {
-            if (server != null) server.close();
-        } catch (Exception ignored) {
-        }
-    }
-
-    private static void close(Socket socket) {
-        try {
-            socket.close();
-        } catch (Exception ignored) {
-        }
     }
 
     private static String encode(String value) throws Exception {

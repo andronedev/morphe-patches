@@ -4,6 +4,7 @@ import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.resourcePatch
 import app.morphe.patches.admobile.Constants.AD_UNIT_STRING_RESOURCES
 import app.morphe.patches.admobile.Constants.COMPATIBILITY_ADMOBILE
+import app.morphe.util.asSequence
 
 @Suppress("unused")
 val disableAdRequestsPatch = resourcePatch(
@@ -18,20 +19,13 @@ val disableAdRequestsPatch = resourcePatch(
         // id is accepted and the request fails instead of returning an ad. Resource names survive
         // obfuscation, which makes this the version resilient half of the ad removal.
         document("res/values/strings.xml").use { document ->
-            val stringNodes = document.getElementsByTagName("string")
+            val cleared = document.getElementsByTagName("string")
+                .asSequence()
+                .filter { it.attributes?.getNamedItem("name")?.nodeValue in AD_UNIT_STRING_RESOURCES }
+                .onEach { it.textContent = "" }
+                .count()
 
-            var clearedCount = 0
-            for (index in 0 until stringNodes.length) {
-                val node = stringNodes.item(index)
-                val name = node.attributes?.getNamedItem("name")?.nodeValue ?: continue
-
-                if (name !in AD_UNIT_STRING_RESOURCES) continue
-
-                node.textContent = ""
-                clearedCount++
-            }
-
-            if (clearedCount == 0) {
+            if (cleared == 0) {
                 throw PatchException(
                     "Could not find any of the ad unit string resources " +
                         "${AD_UNIT_STRING_RESOURCES.joinToString()} in res/values/strings.xml.",

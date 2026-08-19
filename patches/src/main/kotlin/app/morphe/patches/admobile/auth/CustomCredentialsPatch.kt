@@ -4,19 +4,22 @@ import app.morphe.patcher.extensions.InstructionExtensions.addInstructions
 import app.morphe.patcher.extensions.InstructionExtensions.addInstructionsWithLabels
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.instructions
-import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.BytecodePatchContext
+import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patcher.patch.stringOption
+import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod
 import app.morphe.patcher.util.proxy.mutableTypes.MutableMethod.Companion.toMutable
 import app.morphe.patches.admobile.Constants.APPLICATION_CLASS_DESCRIPTOR
 import app.morphe.patches.admobile.Constants.CHECK_USER_LOG_PREFIX
 import app.morphe.patches.admobile.Constants.COMPATIBILITY_ADMOBILE
 import app.morphe.patches.admobile.Constants.CREDENTIALS_CLASS_DESCRIPTOR
-import app.morphe.patches.admobile.Constants.PREFERENCES_KEY_CLASS_DESCRIPTOR
 import app.morphe.patches.admobile.Constants.SYNTHETIC_USER_METHOD_NAME
 import app.morphe.patches.admobile.Constants.USER_CLASS_DESCRIPTOR
+import app.morphe.util.findMutableMethodOf
 import app.morphe.util.getReference
+import app.morphe.util.indexOfFirstInstructionOrThrow
+import app.morphe.util.indexOfFirstInstructionReversed
 import app.morphe.util.indexOfFirstStringInstructionOrThrow
 import app.morphe.util.returnEarly
 import app.morphe.util.setExtensionIsPatchIncluded
@@ -33,10 +36,31 @@ import com.android.tools.smali.dexlib2.immutable.ImmutableMethodImplementation
  */
 context(BytecodePatchContext)
 private fun bundledClientMethod(name: String) =
-    mutableClassDefByOrNull(CREDENTIALS_CLASS_DESCRIPTOR)
-        ?.methods
-        ?.firstOrNull { it.name == name && it.parameters.isEmpty() }
+    mutableClassDefBy(CREDENTIALS_CLASS_DESCRIPTOR)
+        .methods
+        .firstOrNull { it.name == name && it.parameters.isEmpty() }
         ?: throw PatchException("Could not find $CREDENTIALS_CLASS_DESCRIPTOR->$name.")
+
+/**
+ * Answers a suspending `(Preferences.Key) -> Any?` read from the extension, falling through to the
+ * app's own storage when the extension has nothing to say.
+ *
+ * @param keyNameField the field of `Preferences.Key` holding the key name, resolved rather than
+ * spelled out: both the class and the field are named by R8.
+ */
+private fun MutableMethod.hookStoreRead(keyNameField: String) = addInstructionsWithLabels(
+    0,
+    """
+        iget-object v0, p1, $keyNameField
+        invoke-static { v0 }, $CREDENTIALS_CLASS_DESCRIPTOR->forDataStoreKey(Ljava/lang/String;)Ljava/lang/String;
+        move-result-object v0
+        if-eqz v0, :original
+        return-object v0
+
+        :original
+        nop
+    """,
+)
 
 @Suppress("unused")
 val customCredentialsPatch = bytecodePatch(
@@ -84,10 +108,7 @@ val customCredentialsPatch = bytecodePatch(
         // The form writes to the app's private preferences, so the extension needs a context before
         // anything reads a credential. Application.onCreate runs first and its class is named in the
         // manifest, so R8 keeps it.
-        val applicationClass = mutableClassDefByOrNull(APPLICATION_CLASS_DESCRIPTOR)
-            ?: throw PatchException("Could not find $APPLICATION_CLASS_DESCRIPTOR.")
-
-        val onCreate = applicationClass.methods.firstOrNull {
+        val onCreate = mutableClassDefBy(APPLICATION_CLASS_DESCRIPTOR).methods.firstOrNull {
             it.name == "onCreate" && it.parameters.isEmpty() && it.returnType == "V"
         } ?: throw PatchException("Could not find the application's onCreate.")
 
@@ -96,26 +117,27 @@ val customCredentialsPatch = bytecodePatch(
             "invoke-static { p0 }, $CREDENTIALS_CLASS_DESCRIPTOR->init(Landroid/content/Context;)V",
         )
 
-        // 1. The DataStore read. Every secret the token requests need is decrypted here, keyed by
-        //    name, so answering three names stands in for a whole signed-in session. It is a suspend
-        //    function: returning a value rather than the COROUTINE_SUSPENDED marker is what it
-        //    already does whenever nothing has to suspend. A null answer falls through to the app's
-        //    own storage, which keeps the unconfigured app working as before.
-        AppStoreReadFingerprint.method.addInstructionsWithLabels(
-            0,
-            """
-                iget-object v0, p1, $PREFERENCES_KEY_CLASS_DESCRIPTOR->a:Ljava/lang/String;
-                invoke-static { v0 }, $CREDENTIALS_CLASS_DESCRIPTOR->forDataStoreKey(Ljava/lang/String;)Ljava/lang/String;
-                move-result-object v0
-                if-eqz v0, :original
-                return-object v0
+        // 1. The two DataStore reads, one per store. Everything the token requests need is decrypted
+        //    in the first, keyed by name, so answering four names stands in for a whole signed-in
+        //    session; the second holds the currency symbol, which is written only by the sign in the
+        //    patched app never runs. Both are suspend functions: returning a value rather than the
+        //    COROUTINE_SUSPENDED marker is what they already do whenever nothing has to suspend. A
+        //    null answer falls through to the app's own storage, which keeps the unconfigured app
+        //    working as before.
+        //
+        //    The key class and the field holding the key name are both obfuscated, so they are read
+        //    off the method's own signature rather than written down.
+        val preferencesKeyType = AppStoreReadFingerprint.method.parameterTypes.first().toString()
+        val keyNameField = mutableClassDefBy(preferencesKeyType)
+            .fields
+            .singleOrNull { it.type == "Ljava/lang/String;" }
+            ?.let { "$preferencesKeyType->${it.name}:Ljava/lang/String;" }
+            ?: throw PatchException("Could not find the key name field of $preferencesKeyType.")
 
-                :original
-                nop
-            """,
-        )
+        AppStoreReadFingerprint.method.hookStoreRead(keyNameField)
+        SettingsStoreReadFingerprint.method.hookStoreRead(keyNameField)
 
-        // 2. The pre-DataStore read, which the OkHttp authenticators try first for the refresh token.
+        // 2. The pre-DataStore read, which the OkHttp authenticators try first for the tokens.
         AppStoreLegacyReadFingerprint.method.addInstructionsWithLabels(
             0,
             """
@@ -135,7 +157,7 @@ val customCredentialsPatch = bytecodePatch(
         AppStoreWriteFingerprint.method.addInstructions(
             0,
             """
-                iget-object v0, p1, $PREFERENCES_KEY_CLASS_DESCRIPTOR->a:Ljava/lang/String;
+                iget-object v0, p1, $keyNameField
                 invoke-static { v0, p2 }, $CREDENTIALS_CLASS_DESCRIPTOR->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
             """,
         )
@@ -156,49 +178,44 @@ val customCredentialsPatch = bytecodePatch(
             """,
         )
 
-        // 4. The launch screen's sign in button opens the form while nothing is configured, so the
-        //    setup is one tap from the screen a fresh install already lands on. Once credentials
-        //    exist the account is served locally and the button is never reached again.
+        // 4. The sign in button opens the form instead of the Google flow, so the setup is one tap
+        //    from the screen a fresh install already lands on. Every call site is redirected, not
+        //    just the launch screen's: the add account action builds the same intent, and once
+        //    signed in it is the only way back to the form, which is where disconnecting lives.
         val signInIntentMethod = SignInIntentFingerprint.method
-        val signInIntentIndex = signInIntentMethod.instructions.indexOfFirst { instruction ->
-            val reference = instruction.getReference<MethodReference>()
-
-            reference?.returnType == "Landroid/content/Intent;" && reference.parameterTypes.isEmpty()
-        }
-        if (signInIntentIndex < 0) {
-            throw PatchException("Could not find the sign-in intent call.")
-        }
-
         val signInIntentReference = signInIntentMethod
-            .getInstruction<com.android.tools.smali.dexlib2.iface.instruction.Instruction>(signInIntentIndex)
+            .getInstruction(
+                signInIntentMethod.indexOfFirstInstructionOrThrow {
+                    val reference = getReference<MethodReference>()
+
+                    reference?.returnType == "Landroid/content/Intent;" &&
+                        reference.parameterTypes.isEmpty()
+                },
+            )
             .getReference<MethodReference>()
             ?: throw PatchException("Could not resolve the sign-in intent call.")
 
-        // Every call site is redirected, not just the launch screen's: the add account action
-        // builds the same intent, and once signed in it is the only way back to the form — which is
-        // where disconnecting lives, since the app's own sign out cannot forget an account that is
-        // served from the extension rather than from its database.
         var redirected = 0
         classDefForEach { classDef ->
             classDef.methods.forEach { method ->
-                val callIndices = method.implementation
-                    ?.instructions
-                    ?.withIndex()
-                    ?.filter { (_, instruction) ->
+                val instructions = method.implementation?.instructions ?: return@forEach
+
+                // The result register is what gets replaced, so a call site that discards the intent
+                // has nothing to redirect and is skipped.
+                val callIndices = instructions
+                    .withIndex()
+                    .filter { (_, instruction) ->
                         instruction.opcode == Opcode.INVOKE_VIRTUAL &&
                             instruction.getReference<MethodReference>() == signInIntentReference
                     }
-                    ?.map { it.index }
-                    .orEmpty()
+                    .map { it.index }
+                    .filter { instructions.elementAt(it + 1).opcode == Opcode.MOVE_RESULT_OBJECT }
 
                 if (callIndices.isEmpty()) return@forEach
 
-                val mutableMethod = mutableClassDefBy(classDef).methods.first {
-                    it.name == method.name &&
-                        it.parameterTypes == method.parameterTypes &&
-                        it.returnType == method.returnType
-                }
+                val mutableMethod = mutableClassDefBy(classDef).findMutableMethodOf(method)
 
+                // Back to front, so the remaining indices stay valid as instructions are added.
                 callIndices.asReversed().forEach { index ->
                     val register = mutableMethod
                         .getInstruction<OneRegisterInstruction>(index + 1)
@@ -207,7 +224,7 @@ val customCredentialsPatch = bytecodePatch(
                     mutableMethod.addInstructions(
                         index + 2,
                         """
-                            invoke-static { v$register }, $CREDENTIALS_CLASS_DESCRIPTOR->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
+                            invoke-static { }, $CREDENTIALS_CLASS_DESCRIPTOR->signInIntent()Landroid/content/Intent;
                             move-result-object v$register
                         """,
                     )
@@ -229,39 +246,45 @@ val customCredentialsPatch = bytecodePatch(
         )
 
         // 5. checkUser() sends the app to the login screen when the user DAO reports no selected
-        //    account, so that query hands back a fabricated one. The DAO carries no strings of its
-        //    own and is identified by the call checkUser() makes just before logging the result.
+        //    account. The extension writes that account into the app's own database, but only once
+        //    the file exists, and Room creates it lazily, so on a fresh install the first check
+        //    happens before there is anything to find. That one query hands back a fabricated
+        //    account to cover the gap. The DAO carries no strings of its own and is identified by
+        //    the call checkUser() makes just before logging the result.
         val checkUserMethod = CheckUserFingerprint.method
         val checkUserLogIndex = checkUserMethod.indexOfFirstStringInstructionOrThrow(
             CHECK_USER_LOG_PREFIX,
         )
 
-        val selectedUserQuery = checkUserMethod.instructions
-            .withIndex()
-            .take(checkUserLogIndex)
-            .lastOrNull { (_, instruction) ->
-                if (instruction.opcode != Opcode.INVOKE_VIRTUAL) return@lastOrNull false
+        val selectedUserQueryIndex = checkUserMethod.indexOfFirstInstructionReversed(
+            checkUserLogIndex,
+        ) {
+            if (opcode != Opcode.INVOKE_VIRTUAL) return@indexOfFirstInstructionReversed false
 
-                val reference = instruction.getReference<MethodReference>() ?: return@lastOrNull false
+            val reference = getReference<MethodReference>()
+                ?: return@indexOfFirstInstructionReversed false
 
-                reference.returnType == "Ljava/lang/Object;" &&
-                    reference.parameterTypes.map(CharSequence::toString) == listOf("Lyh/c;") &&
-                    // The account manager calls its own suspend helpers here too; the DAO is the
-                    // only call that leaves the class.
-                    reference.definingClass != checkUserMethod.definingClass
-            }
-            ?.value
-            ?.getReference<MethodReference>()
-            ?: throw PatchException("Could not find the selected account query in checkUser().")
+            reference.returnType == "Ljava/lang/Object;" &&
+                reference.parameterTypes.size == 1 &&
+                // The account manager calls its own suspend helpers here too; the DAO is the only
+                // call that leaves the class.
+                reference.definingClass != checkUserMethod.definingClass
+        }
+
+        if (selectedUserQueryIndex < 0) {
+            throw PatchException("Could not find the selected account query in checkUser().")
+        }
+
+        val selectedUserQuery = checkUserMethod
+            .getInstruction(selectedUserQueryIndex)
+            .getReference<MethodReference>()
+            ?: throw PatchException("Could not resolve the selected account query.")
 
         // 6. The account itself. Its constructor takes the columns in schema order: id, sign_id,
         //    fire_id, email, name, avatar, time_zone, currency and the selected flag. The three id
         //    columns share the publisher id because the only thing derived from the account id is
         //    the refresh token key, which step 1 answers for any id. The factory lives on the entity
         //    because it needs ten registers, more than the DAO method reserves.
-        val userClass = mutableClassDefByOrNull(USER_CLASS_DESCRIPTOR)
-            ?: throw PatchException("Could not find $USER_CLASS_DESCRIPTOR.")
-
         val syntheticUserFactory = ImmutableMethod(
             USER_CLASS_DESCRIPTOR,
             SYNTHETIC_USER_METHOD_NAME,
@@ -278,8 +301,6 @@ val customCredentialsPatch = bytecodePatch(
             """
                 invoke-static { }, $CREDENTIALS_CLASS_DESCRIPTOR->publisherId()Ljava/lang/String;
                 move-result-object v1
-                invoke-static { }, $CREDENTIALS_CLASS_DESCRIPTOR->email()Ljava/lang/String;
-                move-result-object v4
                 invoke-static { }, $CREDENTIALS_CLASS_DESCRIPTOR->timeZone()Ljava/lang/String;
                 move-result-object v7
                 invoke-static { }, $CREDENTIALS_CLASS_DESCRIPTOR->currency()Ljava/lang/String;
@@ -288,7 +309,8 @@ val customCredentialsPatch = bytecodePatch(
                 new-instance v0, $USER_CLASS_DESCRIPTOR
                 move-object v2, v1
                 move-object v3, v1
-                move-object v5, v4
+                const-string v4, ""
+                const-string v5, ""
                 const-string v6, ""
                 const/4 v9, 0x1
                 invoke-direct/range { v0 .. v9 }, $USER_CLASS_DESCRIPTOR-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
@@ -296,19 +318,11 @@ val customCredentialsPatch = bytecodePatch(
             """,
         )
 
-        userClass.methods.add(syntheticUserFactory)
-
-        val selectedUserQueryClass = mutableClassDefByOrNull(selectedUserQuery.definingClass)
-            ?: throw PatchException("Could not find ${selectedUserQuery.definingClass}.")
-
-        val selectedUserQueryMethod = selectedUserQueryClass.methods.firstOrNull {
-            it.name == selectedUserQuery.name &&
-                it.parameterTypes.map(CharSequence::toString) == listOf("Lyh/c;")
-        } ?: throw PatchException("Could not find ${selectedUserQuery.name} in the user DAO.")
+        mutableClassDefBy(USER_CLASS_DESCRIPTOR).methods.add(syntheticUserFactory)
 
         // Only stand in once credentials exist, so an unconfigured build still reaches the login
         // screen rather than looping on an account that cannot be authenticated.
-        selectedUserQueryMethod.addInstructionsWithLabels(
+        navigate(selectedUserQuery).stop().addInstructionsWithLabels(
             0,
             """
                 invoke-static { }, $CREDENTIALS_CLASS_DESCRIPTOR->isConfigured()Z
@@ -320,19 +334,6 @@ val customCredentialsPatch = bytecodePatch(
 
                 :original
                 nop
-            """,
-        )
-
-        // 7. The currency symbol. The app stores it when an account is selected through its own
-        //    sign in, which the patched app never runs, so the setting stayed absent and the
-        //    formatter — which appends a space to whatever it is handed — printed the literal text
-        //    "null" in front of every amount and on the chart axis. The account's currency is known
-        //    to the extension, so the symbol is derived from it whenever nothing was stored.
-        ReportCurrencySymbolFingerprint.method.addInstructions(
-            0,
-            """
-                invoke-static { p1 }, $CREDENTIALS_CLASS_DESCRIPTOR->currencySymbolOrOriginal(Ljava/lang/String;)Ljava/lang/String;
-                move-result-object p1
             """,
         )
 

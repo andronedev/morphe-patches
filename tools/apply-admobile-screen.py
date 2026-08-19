@@ -15,8 +15,9 @@ is unavailable. Unlike the patches, the extension dex has to be built and inject
     zip -j AdMobile-patched.apk dex/classes.dex           # rename to the next free classesN.dex
     java -jar uber-apk-signer.jar --apks AdMobile-patched.apk --allowResign
 
-The anchors come from AdMobile 2.4.8; later versions rename them, which is what the patches
-themselves handle.
+This is the same set of edits as the Kotlin patches, spelled out for one build. The patches find
+their anchors through fingerprints; the anchors below are the obfuscated names of AdMobile 2.4.8,
+so a later version needs this table updated. Change one side and the other needs the same change.
 """
 
 import os
@@ -27,70 +28,31 @@ EXTENSION = "Lapp/morphe/extension/admobile/Credentials;"
 USER = "Lio/stark/admob/model/entity/User;"
 
 APP_STORE = "xf/i.smali"
+SETTINGS_STORE = "xf/t.smali"
 USER_DAO = "se/j.smali"
 USER_ENTITY = "io/stark/admob/model/entity/User.smali"
-SIGN_IN_CLIENT = "Landroid/content/Intent;"
 APPLICATION = "io/stark/admob/App.smali"
 ACCOUNT_MANAGER = "af/m.smali"
-REPORT_MANAGER = "af/n.smali"
-PROFILE_LAYOUT = "res/layout/fragment_profile.xml"
-STRINGS = "res/values/strings.xml"
 
-ANCHORS = {
-    "datastore_read": ".method public final g(Ll1/d;Lyh/c;)Ljava/lang/Object;\n    .locals 7\n",
-    "legacy_read": ".method public final h(Ljava/lang/String;)Ljava/lang/String;\n    .locals 4\n",
-    "constructor": ".method public constructor <init>(Ljava/lang/String;Lh1/f;Landroid/content/"
-                   "SharedPreferences;Ldh/a;Ljj/c;Lxf/t;)V\n    .locals 0\n",
-    "datastore_write": ".method public final n(Ll1/d;Ljava/lang/String;Lyh/c;)Ljava/lang/Object;\n"
-                       "    .locals 3\n",
-    "legacy_write": ".method public final o(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 1\n",
-    "selected_user": ".method public final b(Lyh/c;)Ljava/lang/Object;\n    .locals 4\n",
-    "on_create": ".method public final onCreate()V\n    .locals 7\n",
-    "sign_out": ".method public final j(Lyh/c;)Ljava/lang/Object;\n    .locals 12\n",
-    "currency_symbol": ".method public final c(Ljava/lang/String;)V\n    .locals 1\n",
-}
+INTENT = "Landroid/content/Intent;"
 
-
-ANCHOR_FILES = {
-    "datastore_read": APP_STORE,
-    "legacy_read": APP_STORE,
-    "constructor": APP_STORE,
-    "datastore_write": APP_STORE,
-    "legacy_write": APP_STORE,
-    "selected_user": USER_DAO,
-    "on_create": APPLICATION,
-    "sign_out": ACCOUNT_MANAGER,
-    "currency_symbol": REPORT_MANAGER,
-}
-
-
-def insert_after(path, anchor, body):
-    with open(path) as handle:
-        source = handle.read()
-
-    if anchor not in source:
-        sys.exit(f"anchor not found in {path}:\n{anchor}")
-
-    with open(path, "w") as handle:
-        handle.write(source.replace(anchor, anchor + body, 1))
-
-
-def patch_application(smali_dir):
-    """The form writes to private preferences, so the extension needs a context before any read."""
-    insert_after(
-        os.path.join(smali_dir, APPLICATION),
-        ANCHORS["on_create"],
+# name -> (file, anchor, body inserted straight after the anchor).
+#
+# The anchor is the method header plus its .locals line, which is what pins each edit to one method
+# and guarantees the registers the body uses exist.
+EDITS = {
+    # The form writes to private preferences, so the extension needs a context before any read.
+    "application": (
+        APPLICATION,
+        ".method public final onCreate()V\n    .locals 7\n",
         f"""
     invoke-static {{p0}}, {EXTENSION}->init(Landroid/content/Context;)V
 """,
-    )
-
-
-def patch_datastore_read(smali_dir):
-    """A null answer falls through, so an unconfigured build behaves exactly as before."""
-    insert_after(
-        os.path.join(smali_dir, APP_STORE),
-        ANCHORS["datastore_read"],
+    ),
+    # A null answer falls through, so an unconfigured build behaves exactly as before.
+    "datastore_read": (
+        APP_STORE,
+        ".method public final g(Ll1/d;Lyh/c;)Ljava/lang/Object;\n    .locals 7\n",
         f"""
     iget-object v0, p1, Ll1/d;->a:Ljava/lang/String;
 
@@ -105,13 +67,29 @@ def patch_datastore_read(smali_dir):
     :morphe_original
     nop
 """,
-    )
+    ),
+    # The same read on the settings store, which is where the currency symbol lives.
+    "settings_read": (
+        SETTINGS_STORE,
+        ".method public final f(Ll1/d;Lyh/c;)Ljava/lang/Object;\n    .locals 4\n",
+        f"""
+    iget-object v0, p1, Ll1/d;->a:Ljava/lang/String;
 
+    invoke-static {{v0}}, {EXTENSION}->forDataStoreKey(Ljava/lang/String;)Ljava/lang/String;
 
-def patch_legacy_read(smali_dir):
-    insert_after(
-        os.path.join(smali_dir, APP_STORE),
-        ANCHORS["legacy_read"],
+    move-result-object v0
+
+    if-eqz v0, :morphe_original_setting
+
+    return-object v0
+
+    :morphe_original_setting
+    nop
+""",
+    ),
+    "legacy_read": (
+        APP_STORE,
+        ".method public final h(Ljava/lang/String;)Ljava/lang/String;\n    .locals 4\n",
         f"""
     invoke-static {{p1}}, {EXTENSION}->forLegacyKey(Ljava/lang/String;)Ljava/lang/String;
 
@@ -124,137 +102,49 @@ def patch_legacy_read(smali_dir):
     :morphe_original_legacy
     nop
 """,
-    )
-
-
-def patch_writes(smali_dir):
-    """Mirror the app's own token writes, so a refreshed token is not shadowed by an expired one."""
-    insert_after(
-        os.path.join(smali_dir, APP_STORE),
-        ANCHORS["datastore_write"],
+    ),
+    # Mirror the app's own token writes, so a refreshed token is not shadowed by an expired one.
+    "datastore_write": (
+        APP_STORE,
+        ".method public final n(Ll1/d;Ljava/lang/String;Lyh/c;)Ljava/lang/Object;\n    .locals 3\n",
         f"""
     iget-object v0, p1, Ll1/d;->a:Ljava/lang/String;
 
     invoke-static {{v0, p2}}, {EXTENSION}->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
 """,
-    )
-
-    insert_after(
-        os.path.join(smali_dir, APP_STORE),
-        ANCHORS["legacy_write"],
+    ),
+    "legacy_write": (
+        APP_STORE,
+        ".method public final o(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 1\n",
         f"""
     invoke-static {{p1, p2}}, {EXTENSION}->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
 """,
-    )
-
-
-def patch_sign_out(smali_dir):
-    """The app forgets the account in its database, which is not where the patched one lives."""
-    insert_after(
-        os.path.join(smali_dir, ACCOUNT_MANAGER),
-        ANCHORS["sign_out"],
+    ),
+    # The app forgets the account in its database, which is not where the patched one lives.
+    "sign_out": (
+        ACCOUNT_MANAGER,
+        ".method public final j(Lyh/c;)Ljava/lang/Object;\n    .locals 12\n",
         f"""
     invoke-static {{}}, {EXTENSION}->signOut()V
 """,
-    )
-
-
-def patch_currency_symbol(smali_dir):
-    """The app stores the currency symbol when an account is selected through its own sign in.
-
-    The patched app never takes that path, so the setting stayed absent, and the formatter — which
-    appends a space to whatever it is handed — printed the literal text "null" in front of every
-    amount and on the chart axis.
-    """
-    insert_after(
-        os.path.join(smali_dir, REPORT_MANAGER),
-        ANCHORS["currency_symbol"],
-        f"""
-    invoke-static {{p1}}, {EXTENSION}->currencySymbolOrOriginal(Ljava/lang/String;)Ljava/lang/String;
-
-    move-result-object p1
-""",
-    )
-
-
-def patch_constructor(smali_dir):
-    """The client id is read once here and travels to both token requests as a field.
-
-    The constructor reserves no locals, so the parameter register is reused in place.
-    """
-    insert_after(
-        os.path.join(smali_dir, APP_STORE),
-        ANCHORS["constructor"],
+    ),
+    # The client id is read once here and travels to both token requests as a field. The
+    # constructor reserves no locals, so the parameter register is reused in place.
+    "constructor": (
+        APP_STORE,
+        ".method public constructor <init>(Ljava/lang/String;Lh1/f;Landroid/content/"
+        "SharedPreferences;Ldh/a;Ljj/c;Lxf/t;)V\n    .locals 0\n",
         f"""
     invoke-static {{p1}}, {EXTENSION}->clientIdOrOriginal(Ljava/lang/String;)Ljava/lang/String;
 
     move-result-object p1
 """,
-    )
-
-
-def add_synthetic_user(smali_dir):
-    """Columns in schema order: id, sign_id, fire_id, email, name, avatar, time_zone, currency,
-    is_selected. The three id columns share the publisher id, because the only value derived from
-    the account id is the refresh token key, which the DataStore hook answers for any id.
-    """
-    path = os.path.join(smali_dir, USER_ENTITY)
-    with open(path) as handle:
-        source = handle.read().rstrip()
-
-    with open(path, "w") as handle:
-        handle.write(
-            source
-            + f"""
-
-.method public static morpheSyntheticUser()Lio/stark/admob/model/entity/User;
-    .locals 10
-
-    invoke-static {{}}, {EXTENSION}->publisherId()Ljava/lang/String;
-
-    move-result-object v1
-
-    invoke-static {{}}, {EXTENSION}->email()Ljava/lang/String;
-
-    move-result-object v4
-
-    invoke-static {{}}, {EXTENSION}->timeZone()Ljava/lang/String;
-
-    move-result-object v7
-
-    invoke-static {{}}, {EXTENSION}->currency()Ljava/lang/String;
-
-    move-result-object v8
-
-    new-instance v0, {USER}
-
-    move-object v2, v1
-
-    move-object v3, v1
-
-    move-object v5, v4
-
-    const-string v6, ""
-
-    const/4 v9, 0x1
-
-    invoke-direct/range {{v0 .. v9}}, {USER}-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
-
-    return-object v0
-.end method
-"""
-        )
-
-
-def patch_selected_user_query(smali_dir):
-    """checkUser() sends the app to the login screen when this comes back null.
-
-    Only stand in once credentials exist, so an unconfigured build still reaches the login screen
-    rather than looping on an account that cannot be authenticated.
-    """
-    insert_after(
-        os.path.join(smali_dir, USER_DAO),
-        ANCHORS["selected_user"],
+    ),
+    # checkUser() sends the app to the login screen when this comes back null. Only stand in once
+    # credentials exist, so an unconfigured build still reaches the login screen.
+    "selected_user": (
+        USER_DAO,
+        ".method public final b(Lyh/c;)Ljava/lang/Object;\n    .locals 4\n",
         f"""
     invoke-static {{}}, {EXTENSION}->isConfigured()Z
 
@@ -271,25 +161,65 @@ def patch_selected_user_query(smali_dir):
     :morphe_original_user
     nop
 """,
-    )
+    ),
+}
+
+# The account factory, appended to the entity rather than inserted. Constructor columns in schema
+# order: id, sign_id, fire_id, email, name, avatar, time_zone, currency, is_selected. The three id
+# columns share the publisher id, because the only value derived from the account id is the refresh
+# token key, which the DataStore hook answers for any id.
+SYNTHETIC_USER = f"""
+
+.method public static morpheSyntheticUser()Lio/stark/admob/model/entity/User;
+    .locals 10
+
+    invoke-static {{}}, {EXTENSION}->publisherId()Ljava/lang/String;
+
+    move-result-object v1
+
+    invoke-static {{}}, {EXTENSION}->timeZone()Ljava/lang/String;
+
+    move-result-object v7
+
+    invoke-static {{}}, {EXTENSION}->currency()Ljava/lang/String;
+
+    move-result-object v8
+
+    new-instance v0, {USER}
+
+    move-object v2, v1
+
+    move-object v3, v1
+
+    const-string v4, ""
+
+    const-string v5, ""
+
+    const-string v6, ""
+
+    const/4 v9, 0x1
+
+    invoke-direct/range {{v0 .. v9}}, {USER}-><init>(Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Z)V
+
+    return-object v0
+.end method
+"""
+
+# apktool interleaves .line directives and blank lines between the call and its result.
+SIGN_IN_INTENT = re.compile(
+    r"(invoke-virtual \{v\d+\}, L[^;]+;->\w+\(\)Landroid/content/Intent;\n"
+    r"(?:[ \t]*\n|[ \t]*\.line \d+\n)*"
+    r"[ \t]*move-result-object (v\d+)\n)"
+)
 
 
 def patch_sign_in_intent(smali_dir):
-    """The launch screen's sign in button opens the form while nothing is configured.
+    """The sign in button opens the form rather than a Google flow a re-signed APK cannot complete.
 
-    Both the sign-in client and the click handler are obfuscated, but the launch fragment is named
-    in the navigation graph, so the single no-argument call returning an Intent inside a method that
-    mentions it is the one to redirect.
+    Both the sign-in client and the click handler are obfuscated, but every call site is redirected,
+    not just the launch screen's: the add account action builds the same intent, and once signed in
+    it is the only way back to the form.
     """
-    # apktool interleaves .line directives and blank lines between the call and its result.
-    pattern = re.compile(
-        r"(invoke-virtual \{v\d+\}, L[^;]+;->\w+\(\)Landroid/content/Intent;\n"
-        r"(?:[ \t]*\n|[ \t]*\.line \d+\n)*"
-        r"[ \t]*move-result-object (v\d+)\n)"
-    )
-
-    # Every call site is redirected, not just the launch screen's: the add account action builds the
-    # same intent, and once signed in it is the only way back to the form.
     redirected = 0
 
     for directory, _, names in os.walk(smali_dir):
@@ -301,13 +231,13 @@ def patch_sign_in_intent(smali_dir):
             with open(path) as handle:
                 source = handle.read()
 
-            if SIGN_IN_CLIENT not in source:
+            if INTENT not in source:
                 continue
 
-            patched, count = pattern.subn(
+            patched, count = SIGN_IN_INTENT.subn(
                 lambda found: found.group(1)
                 + f"""
-    invoke-static {{{found.group(2)}}}, {EXTENSION}->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
+    invoke-static {{}}, {EXTENSION}->signInIntent()Landroid/content/Intent;
 
     move-result-object {found.group(2)}
 """,
@@ -358,33 +288,34 @@ def main():
     if not os.path.isdir(smali_dir):
         sys.exit(f"{smali_dir} not found; decode the base APK with apktool first")
 
-    # Check every anchor before writing anything. A half-applied run leaves the tree with duplicate
-    # labels, and the only way back is to decode again.
-    with open(os.path.join(smali_dir, APP_STORE)) as handle:
-        app_store = handle.read()
+    # Every file is read once, edited in memory and written once, so a missing anchor leaves the
+    # tree untouched. A half-applied run leaves duplicate labels behind and the only way back is to
+    # decode again.
+    sources = {}
+    for name, (path, anchor, body) in EDITS.items():
+        source = sources.get(path)
+        if source is None:
+            with open(os.path.join(smali_dir, path)) as handle:
+                source = handle.read()
 
-    if EXTENSION in app_store:
-        sys.exit("already patched; decode the APK again to start from a clean tree")
+            if EXTENSION in source:
+                sys.exit("already patched; decode the APK again to start from a clean tree")
 
-    for name, anchor in ANCHORS.items():
-        path = ANCHOR_FILES[name]
-        with open(os.path.join(smali_dir, path)) as handle:
-            if anchor not in handle.read():
-                sys.exit(f"anchor '{name}' not found in {path}")
+        if anchor not in source:
+            sys.exit(f"anchor '{name}' not found in {path}")
 
-    patch_application(smali_dir)
-    patch_datastore_read(smali_dir)
-    patch_legacy_read(smali_dir)
-    patch_writes(smali_dir)
-    patch_sign_out(smali_dir)
-    patch_currency_symbol(smali_dir)
-    patch_constructor(smali_dir)
-    add_synthetic_user(smali_dir)
+        sources[path] = source.replace(anchor, anchor + body, 1)
+
+    sources[USER_ENTITY] = open(os.path.join(smali_dir, USER_ENTITY)).read().rstrip() + SYNTHETIC_USER
+
+    for path, source in sources.items():
+        with open(os.path.join(smali_dir, path), "w") as handle:
+            handle.write(source)
+
     patch_sign_in_intent(smali_dir)
-    patch_selected_user_query(smali_dir)
     patch_manifest(decoded_dir)
 
-    print("applied 12 edits; now build, inject the extension dex, and sign")
+    print(f"applied {len(EDITS) + 3} edits; now build, inject the extension dex, and sign")
 
 
 if __name__ == "__main__":

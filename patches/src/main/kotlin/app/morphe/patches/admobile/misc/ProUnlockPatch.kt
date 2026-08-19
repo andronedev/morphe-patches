@@ -2,14 +2,16 @@ package app.morphe.patches.admobile.misc
 
 import app.morphe.patcher.extensions.InstructionExtensions.addInstruction
 import app.morphe.patcher.extensions.InstructionExtensions.getInstruction
-import app.morphe.patcher.extensions.InstructionExtensions.instructions
 import app.morphe.patcher.patch.PatchException
 import app.morphe.patcher.patch.bytecodePatch
 import app.morphe.patches.admobile.Constants.COMPATIBILITY_ADMOBILE
 import app.morphe.patches.admobile.Constants.VERIFY_APP_PURCHASE_LOG_PREFIX
+import app.morphe.util.findInstructionIndicesReversed
+import app.morphe.util.getReference
 import app.morphe.util.indexOfFirstStringInstructionOrThrow
 import com.android.tools.smali.dexlib2.Opcode
 import com.android.tools.smali.dexlib2.iface.instruction.TwoRegisterInstruction
+import com.android.tools.smali.dexlib2.iface.reference.FieldReference
 
 @Suppress("unused")
 val proUnlockPatch = bytecodePatch(
@@ -35,23 +37,21 @@ val proUnlockPatch = bytecodePatch(
             VERIFY_APP_PURCHASE_LOG_PREFIX,
         )
 
-        // The pro flag is the only boolean field this method writes.
-        val proFlagWriteIndices = method.instructions
-            .withIndex()
-            .filter { (index, instruction) ->
-                index > verificationLogIndex && instruction.opcode == Opcode.IPUT_BOOLEAN
+        // Both writes go to the same field, and only writes to that one are forced: a later version
+        // setting some other boolean here must not be caught up in it.
+        val writeIndices = method.findInstructionIndicesReversed(Opcode.IPUT_BOOLEAN)
+            .filter { it > verificationLogIndex }
+
+        val proFlag = writeIndices.lastOrNull()?.let { method.getInstruction(it).getReference<FieldReference>() }
+            ?: throw PatchException("Could not find the pro flag write in ${method.name}.")
+
+        // Already in reverse order, so the remaining indices stay valid as instructions are added.
+        writeIndices
+            .filter { method.getInstruction(it).getReference<FieldReference>() == proFlag }
+            .forEach { index ->
+                val valueRegister = method.getInstruction<TwoRegisterInstruction>(index).registerA
+
+                method.addInstruction(index, "const/16 v$valueRegister, 0x1")
             }
-            .map { it.index }
-
-        if (proFlagWriteIndices.isEmpty()) {
-            throw PatchException("Could not find the pro flag write in ${method.name}.")
-        }
-
-        // Insert back to front so the remaining indices stay valid as instructions are added.
-        proFlagWriteIndices.asReversed().forEach { index ->
-            val valueRegister = method.getInstruction<TwoRegisterInstruction>(index).registerA
-
-            method.addInstruction(index, "const/16 v$valueRegister, 0x1")
-        }
     }
 }

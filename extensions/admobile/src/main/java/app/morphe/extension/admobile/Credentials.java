@@ -6,6 +6,7 @@ import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
+import java.io.Closeable;
 import java.io.File;
 import java.util.Currency;
 import java.util.Locale;
@@ -45,13 +46,15 @@ public final class Credentials {
      */
     public static final String KEY_ACCESS_TOKEN = "access_token";
     public static final String KEY_PUBLISHER_ID = "publisher_id";
-    public static final String KEY_EMAIL = "email";
     public static final String KEY_TIME_ZONE = "time_zone";
     public static final String KEY_CURRENCY = "currency";
 
+    /** What the last seeded database row was built from, so the next launch can skip the write. */
+    private static final String KEY_SEEDED = "seeded";
+
     /**
      * Outcome of the last sign in. Kept because the browser holds the foreground while the flow
-     * runs, and the system is free to tear the form down behind it — a toast would be lost.
+     * runs, and the system is free to tear the form down behind it, so a toast would be lost.
      */
     public static final String KEY_LAST_STATUS = "last_status";
 
@@ -72,11 +75,19 @@ public final class Credentials {
     private static final String DATA_STORE_REFRESH_TOKEN_PREFIX = "token_refresh_";
     private static final String DATA_STORE_ACCESS_TOKEN_PREFIX = "token_access_";
 
+    /**
+     * The currency symbol the report formatter prefixes every amount with. It lives in the app's
+     * settings store, written only when an account is selected through the app's own sign in, so in
+     * a patched build it is never set and the formatter prints the word "null" instead.
+     */
+    private static final String SETTING_CURRENCY_SYMBOL = "config_currency_code";
+
     /** Names the OkHttp authenticators look up in the pre-DataStore storage. */
     private static final String LEGACY_REFRESH_TOKEN = "user_token_refresh";
     private static final String LEGACY_ACCESS_TOKEN = "user_token_access";
 
     private static Context context;
+    private static SharedPreferences preferences;
 
     private Credentials() {
     }
@@ -118,82 +129,98 @@ public final class Credentials {
         return !effectiveClientId().isEmpty() && !effectiveClientSecret().isEmpty();
     }
 
+    /** Binds the extension to the app's context. Cheap enough for any entry point to call. */
+    public static void attach(Context applicationContext) {
+        if (context != null) return;
+
+        context = applicationContext.getApplicationContext();
+        preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
+    }
+
     /** Called from the patched {@code Application.onCreate}. */
     public static void init(Context applicationContext) {
-        context = applicationContext.getApplicationContext();
-
-        if (isConfigured()) seedAccount();
+        attach(applicationContext);
+        seedAccount();
     }
 
     /**
      * Writes the account into the app's own database.
      *
      * <p>Answering the query for the selected account is enough to get past the startup check, but
-     * the rest of the app reads the same table through other queries — the account list the home
-     * screen observes among them — and those saw an empty table, so nothing was ever requested.
+     * the rest of the app reads the same table through other queries, the account list the home
+     * screen observes among them, and those saw an empty table, so nothing was ever requested.
      *
      * <p>Done from {@code Application.onCreate}, before Room opens the file, and only when it
      * already exists: the first sign in restarts the app, so the row lands on the way back up.
+     * Unchanged credentials write nothing, which keeps the database off the startup path.
      */
     public static void seedAccount() {
-        if (context == null) return;
+        if (context == null || !isConfigured()) return;
 
-        File database = context.getDatabasePath(DATABASE_NAME);
-        if (!database.exists()) return;
-
-        SQLiteDatabase handle = null;
-        try {
-            handle = SQLiteDatabase.openDatabase(
-                    database.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
-
-            String publisher = get(KEY_PUBLISHER_ID);
-            handle.execSQL(
-                    "INSERT OR REPLACE INTO users"
-                            + " (id, sign_id, fire_id, email, name, avatar, time_zone, currency,"
-                            + " is_selected) VALUES (?,?,?,?,?,?,?,?,1)",
-                    new Object[]{
-                            publisher, publisher, publisher,
-                            email(), email(), "", timeZone(), currency(),
-                    });
-        } catch (Exception exception) {
-            Log.e(TAG, "could not seed the account", exception);
-        } finally {
-            close(handle);
+        // Clearing the app's data takes the database with it, so what was seeded into it is gone
+        // too and the next launch has to write the row again.
+        if (!context.getDatabasePath(DATABASE_NAME).exists()) {
+            put(KEY_SEEDED, "");
+            return;
         }
+
+        String row = publisherId() + "|" + timeZone() + "|" + currency();
+        if (row.equals(get(KEY_SEEDED))) return;
+
+        boolean written = withDatabase(
+                "INSERT OR REPLACE INTO users (id, sign_id, fire_id, email, name, avatar,"
+                        + " time_zone, currency, is_selected) VALUES (?,?,?,?,?,?,?,?,1)",
+                new Object[]{
+                        publisherId(), publisherId(), publisherId(),
+                        "", "", "", timeZone(), currency(),
+                });
+
+        if (written) put(KEY_SEEDED, row);
     }
 
     private static void clearAccount() {
-        if (context == null) return;
+        withDatabase("DELETE FROM users WHERE id = ?", new Object[]{publisherId()});
+        put(KEY_SEEDED, "");
+    }
+
+    /**
+     * Runs one statement against the app's database.
+     *
+     * <p>Write-ahead logging is asked for explicitly because Room opens the same file that way, and
+     * opening it without would take it out of WAL and force a checkpoint on every launch.
+     *
+     * @return whether the statement ran.
+     */
+    private static boolean withDatabase(String statement, Object[] arguments) {
+        if (context == null) return false;
 
         File database = context.getDatabasePath(DATABASE_NAME);
-        if (!database.exists()) return;
+        if (!database.exists()) return false;
 
         SQLiteDatabase handle = null;
         try {
             handle = SQLiteDatabase.openDatabase(
-                    database.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
-            handle.execSQL("DELETE FROM users");
+                    database.getPath(),
+                    null,
+                    SQLiteDatabase.OPEN_READWRITE | SQLiteDatabase.ENABLE_WRITE_AHEAD_LOGGING);
+            handle.execSQL(statement, arguments);
+            return true;
         } catch (Exception exception) {
-            Log.e(TAG, "could not clear the account", exception);
+            Log.e(TAG, "could not run " + statement, exception);
+            return false;
         } finally {
-            close(handle);
+            closeQuietly(handle);
         }
     }
 
-    private static void close(SQLiteDatabase handle) {
+    static void closeQuietly(Closeable closeable) {
         try {
-            if (handle != null) handle.close();
+            if (closeable != null) closeable.close();
         } catch (Exception ignored) {
         }
     }
 
-    private static SharedPreferences preferences() {
-        if (context == null) return null;
-        return context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE);
-    }
-
     public static String get(String key) {
-        SharedPreferences preferences = preferences();
         if (preferences == null) return "";
 
         String value = preferences.getString(key, "");
@@ -201,16 +228,24 @@ public final class Credentials {
     }
 
     public static void put(String key, String value) {
-        SharedPreferences preferences = preferences();
         if (preferences == null) {
-            Log.e(TAG, "put before init: " + key);
+            Log.e(TAG, "put before attach: " + key);
             return;
         }
 
         preferences.edit().putString(key, value == null ? "" : value.trim()).apply();
     }
 
-    /** True once the four values the token requests need are present. */
+    /** One commit for the lot, rather than one per key. */
+    public static void clear(String... keys) {
+        if (preferences == null) return;
+
+        SharedPreferences.Editor editor = preferences.edit();
+        for (String key : keys) editor.putString(key, "");
+        editor.apply();
+    }
+
+    /** True once the values the token requests need are present. */
     public static boolean isConfigured() {
         return hasClient()
                 && !get(KEY_REFRESH_TOKEN).isEmpty()
@@ -218,17 +253,32 @@ public final class Credentials {
     }
 
     /**
-     * Answers the app's decrypting DataStore read.
+     * Answers the app's decrypting DataStore reads, on the store holding the secrets and on the one
+     * holding the settings alike.
+     *
+     * <p>The name is matched before anything is read back, because these run on every read the app
+     * makes, not only the ones this class has an answer for.
      *
      * @return the configured value, or null to let the app read its own storage.
      */
     public static String forDataStoreKey(String name) {
-        if (name == null || !isConfigured()) return null;
+        if (name == null) return null;
 
-        if (DATA_STORE_CLIENT_SECRET.equals(name)) return effectiveClientSecret();
-        if (DATA_STORE_PUBLISHER_ID.equals(name)) return get(KEY_PUBLISHER_ID);
-        if (name.startsWith(DATA_STORE_REFRESH_TOKEN_PREFIX)) return get(KEY_REFRESH_TOKEN);
-        if (name.startsWith(DATA_STORE_ACCESS_TOKEN_PREFIX)) return get(KEY_ACCESS_TOKEN);
+        if (DATA_STORE_CLIENT_SECRET.equals(name)) {
+            return isConfigured() ? effectiveClientSecret() : null;
+        }
+        if (DATA_STORE_PUBLISHER_ID.equals(name)) {
+            return isConfigured() ? publisherId() : null;
+        }
+        if (SETTING_CURRENCY_SYMBOL.equals(name)) {
+            return isConfigured() ? currencySymbol() : null;
+        }
+        if (name.startsWith(DATA_STORE_REFRESH_TOKEN_PREFIX)) {
+            return isConfigured() ? get(KEY_REFRESH_TOKEN) : null;
+        }
+        if (name.startsWith(DATA_STORE_ACCESS_TOKEN_PREFIX)) {
+            return isConfigured() ? get(KEY_ACCESS_TOKEN) : null;
+        }
 
         return null;
     }
@@ -240,10 +290,14 @@ public final class Credentials {
      * "not signed in" and skips fetching altogether, whatever else is in place.
      */
     public static String forLegacyKey(String name) {
-        if (name == null || !isConfigured()) return null;
+        if (name == null) return null;
 
-        if (LEGACY_REFRESH_TOKEN.equals(name)) return get(KEY_REFRESH_TOKEN);
-        if (LEGACY_ACCESS_TOKEN.equals(name)) return get(KEY_ACCESS_TOKEN);
+        if (LEGACY_REFRESH_TOKEN.equals(name)) {
+            return isConfigured() ? get(KEY_REFRESH_TOKEN) : null;
+        }
+        if (LEGACY_ACCESS_TOKEN.equals(name)) {
+            return isConfigured() ? get(KEY_ACCESS_TOKEN) : null;
+        }
 
         return null;
     }
@@ -278,47 +332,35 @@ public final class Credentials {
     }
 
     /**
-     * Substitutes the Google Sign-In intent while no credentials are stored, so the app's own sign
-     * in button opens the form instead of a flow a re-signed APK cannot complete. Once they are
-     * stored the account is served locally and the button is never reached again.
-     *
-     * @param original the intent the app built.
+     * Where the app's sign in button goes in a patched build: to the form, rather than to a Google
+     * flow a re-signed APK cannot complete. It stays reachable once credentials are stored, because
+     * it is also where disconnecting lives.
      */
-    public static Intent signInIntentOrOriginal(Intent original) {
-        if (context == null) return original;
-
+    public static Intent signInIntent() {
         Intent intent = new Intent();
-        intent.setClassName(context.getPackageName(), CredentialsActivity.class.getName());
+        if (context != null) {
+            intent.setClassName(context.getPackageName(), CredentialsActivity.class.getName());
+        }
         return intent;
     }
 
     /**
      * Forgets the session but keeps the OAuth client, which is a property of the build rather than
-     * of whoever is signed in — so signing back in is one tap, with the fields already filled.
+     * of whoever is signed in, so signing back in is one tap with the fields already filled.
      *
      * <p>Clearing it is also what actually signs the user out: the app's own sign out leaves the
      * fabricated account in place, since that account is served from here rather than from its
      * database.
      */
     public static void signOut() {
-        put(KEY_REFRESH_TOKEN, "");
-        put(KEY_ACCESS_TOKEN, "");
-        put(KEY_PUBLISHER_ID, "");
-        put(KEY_EMAIL, "");
-        put(KEY_LAST_STATUS, "");
-        put(KEY_PENDING_CODE, "");
-        put(KEY_PENDING_VERIFIER, "");
-        put(KEY_PENDING_REDIRECT, "");
-
         clearAccount();
+
+        clear(KEY_REFRESH_TOKEN, KEY_ACCESS_TOKEN, KEY_PUBLISHER_ID, KEY_LAST_STATUS,
+                KEY_PENDING_CODE, KEY_PENDING_VERIFIER, KEY_PENDING_REDIRECT);
     }
 
     public static String publisherId() {
         return get(KEY_PUBLISHER_ID);
-    }
-
-    public static String email() {
-        return get(KEY_EMAIL);
     }
 
     public static String timeZone() {
@@ -331,22 +373,8 @@ public final class Credentials {
         return currency.isEmpty() ? "USD" : currency;
     }
 
-    /**
-     * Answers the currency symbol every formatted amount is prefixed with.
-     *
-     * <p>The app stores that symbol when an account is selected through its own sign in, a path the
-     * patched app never takes, so the stored value stays absent. The formatter appends a space to
-     * whatever it is handed, which turned a missing symbol into the literal text {@code null} in
-     * front of every amount and on the chart axis.
-     *
-     * <p>The account's currency is known here, so the symbol is derived from it.
-     *
-     * @param original the symbol the app read from its settings.
-     */
-    public static String currencySymbolOrOriginal(String original) {
-        if (original != null && !original.trim().isEmpty()) return original;
-        if (!isConfigured()) return original;
-
+    /** The symbol for {@link #currency()}, falling back to the code the app would show anyway. */
+    public static String currencySymbol() {
         String code = currency();
         try {
             String symbol = Currency.getInstance(code).getSymbol(Locale.US);
@@ -355,7 +383,6 @@ public final class Credentials {
             Log.w(TAG, "no symbol for " + code, exception);
         }
 
-        // The code itself, which is what the app falls back to for a currency it has no symbol for.
         return code;
     }
 }

@@ -19,33 +19,21 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 /**
- * Sign in screen for the patched app.
+ * Sign in screen for the patched app, laid out as the two steps it really is: name the Google API
+ * client once, then connect an account with it.
  *
- * <p>Opened by the app's own sign in button while no credentials are stored, so setup is one tap
- * from the screen the user already lands on. When the patch was built with an OAuth client, the
- * whole flow is a single button: the browser handles the consent and everything else, publisher id
- * included, is read back from Google. The manual fields stay available for builds without a
- * bundled client, or to paste a token obtained elsewhere.
+ * <p>Reached from the app's own sign in and add account buttons, both of which the patch redirects
+ * here — so it stays available once signed in, which is where disconnecting lives. The app's own
+ * sign out cannot work on its own: the account it would forget is served from {@link Credentials}
+ * rather than from its database.
  *
- * <p>Built in code rather than from a layout so the patch adds no resources, and painted entirely
- * from the Material 3 colour roles of the app's own theme, which the patch puts on this activity.
- * That way it follows the app in light and dark, and picks up the dynamic palette on Android 12
- * and above, without shipping colours of its own.
+ * <p>The client id and secret are properties of the build, not of whoever is signed in, so they
+ * survive disconnecting and come back prefilled.
+ *
+ * <p>Built in code rather than from a layout so the patch adds no resources, and painted from the
+ * Material 3 colour roles of the app's own theme, which the patch puts on this activity.
  */
 public final class CredentialsActivity extends Activity {
-
-    /** key, label, hint, required. */
-    private static final String[][] FIELDS = {
-            {Credentials.KEY_CLIENT_ID, "OAuth client id", "000000000000-xxxx.apps.googleusercontent.com", "1"},
-            {Credentials.KEY_CLIENT_SECRET, "OAuth client secret", "GOCSPX-…", "1"},
-            {Credentials.KEY_REFRESH_TOKEN, "Refresh token", "issued for the admob.readonly scope", "1"},
-            {Credentials.KEY_PUBLISHER_ID, "AdMob publisher id", "pub-0000000000000000", "1"},
-            {Credentials.KEY_EMAIL, "Account email", "shown as the account name", ""},
-            {Credentials.KEY_TIME_ZONE, "Report time zone", "UTC", ""},
-            {Credentials.KEY_CURRENCY, "Report currency", "USD", ""},
-    };
-
-    private final EditText[] inputs = new EditText[FIELDS.length];
 
     private int surface;
     private int onSurface;
@@ -54,10 +42,11 @@ public final class CredentialsActivity extends Activity {
     private int primary;
     private int onPrimary;
 
-    private TextView signIn;
-    private LinearLayout manualSection;
-    private TextView manualToggle;
+    private EditText clientId;
+    private EditText clientSecret;
+    private TextView action;
     private TextView status;
+    private TextView disconnect;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -75,61 +64,62 @@ public final class CredentialsActivity extends Activity {
         form.setPadding(padding, padding + statusBarHeight(), padding, padding);
 
         form.addView(headline("Connect your AdMob account"));
-        form.addView(body(
-                "This build reads your reports with Google API credentials of its own, so it does "
-                        + "not need the Google sign in that a re-signed app cannot complete."));
+        form.addView(body("This build reads your reports with your own Google API credentials, so "
+                + "it does not need the Google sign in that a re-signed app cannot complete."));
 
-        boolean bundledClient = Credentials.hasClient();
+        // Step 1 — the client, entered once and kept.
+        form.addView(step("Step 1", "Your Google API client"));
+        form.addView(body("Create a project on Google Cloud, enable the AdMob API, then add an "
+                + "OAuth client of type Desktop. Paste its two values here."));
 
-        signIn = filledButton("Sign in with Google", new View.OnClickListener() {
+        form.addView(label("OAuth client id"));
+        clientId = field("000000000000-xxxx.apps.googleusercontent.com",
+                Credentials.get(Credentials.KEY_CLIENT_ID));
+        form.addView(clientId);
+
+        form.addView(label("OAuth client secret"));
+        clientSecret = field("GOCSPX-…", Credentials.get(Credentials.KEY_CLIENT_SECRET));
+        form.addView(clientSecret);
+
+        // Step 2 — the account.
+        form.addView(step("Step 2", "Connect your account"));
+        form.addView(body("The browser opens on Google's consent screen. Everything else, "
+                + "publisher id included, is read back automatically."));
+
+        action = filledButton("Sign in with Google", new View.OnClickListener() {
             @Override
             public void onClick(View view) {
                 startSignIn();
             }
         });
-        form.addView(signIn, marginTop(dp(28)));
+        form.addView(action, marginTop(dp(16)));
 
         status = body("");
         status.setVisibility(View.GONE);
         form.addView(status);
 
-        if (!bundledClient) {
-            form.addView(body(
-                    "No OAuth client is built into this patch. Fill the client id and secret in "
-                            + "below first, then sign in — or paste a refresh token directly."));
-        }
-
-        manualToggle = body("Enter the values manually");
-        manualToggle.setTextColor(primary);
-        manualToggle.setGravity(Gravity.CENTER_HORIZONTAL);
-        manualToggle.setPadding(0, dp(24), 0, dp(4));
-        manualToggle.setOnClickListener(new View.OnClickListener() {
+        TextView check = link("Run a connection check");
+        check.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                boolean showing = manualSection.getVisibility() == View.VISIBLE;
-                manualSection.setVisibility(showing ? View.GONE : View.VISIBLE);
-                manualToggle.setText(showing ? "Enter the values manually" : "Hide the fields");
-            }
-        });
-        form.addView(manualToggle);
-
-        TextView diagnose = body("Run a connection check");
-        diagnose.setTextColor(primary);
-        diagnose.setGravity(Gravity.CENTER_HORIZONTAL);
-        diagnose.setPadding(0, dp(16), 0, 0);
-        diagnose.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
+                persistClient();
                 status.setText("Checking…");
                 status.setVisibility(View.VISIBLE);
                 OAuthFlow.diagnose(CredentialsActivity.this, signInCallback());
             }
         });
-        form.addView(diagnose);
+        form.addView(check);
 
-        manualSection = buildManualSection();
-        manualSection.setVisibility(bundledClient ? View.GONE : View.VISIBLE);
-        form.addView(manualSection);
+        disconnect = link("Disconnect this account");
+        disconnect.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Credentials.signOut();
+                Toast.makeText(CredentialsActivity.this, "Disconnected.", Toast.LENGTH_SHORT).show();
+                restartApp();
+            }
+        });
+        form.addView(disconnect);
 
         ScrollView root = new ScrollView(this);
         root.setBackgroundColor(surface);
@@ -146,34 +136,36 @@ public final class CredentialsActivity extends Activity {
     protected void onResume() {
         super.onResume();
 
-        if (Credentials.isConfigured()) {
-            restartApp();
-            return;
-        }
-
-        String last = Credentials.get(Credentials.KEY_LAST_STATUS);
-        status.setText(last);
-        status.setVisibility(last.isEmpty() ? View.GONE : View.VISIBLE);
-
-        // The browser has handed the code back and the app is in the foreground again, which is
-        // exactly when the exchange can reach the network.
+        // The code came back and the app is in the foreground again, which is exactly when the
+        // exchange can reach the network.
         if (OAuthFlow.hasPendingCode()) {
-            signIn.setEnabled(false);
-            signIn.setText("Finishing…");
+            action.setEnabled(false);
+            action.setText("Finishing…");
             OAuthFlow.completePending(this, signInCallback());
             return;
         }
 
-        signIn.setEnabled(true);
-        signIn.setText("Sign in with Google");
+        boolean connected = Credentials.isConfigured();
+
+        action.setEnabled(true);
+        action.setText(connected ? "Reconnect" : "Sign in with Google");
+        disconnect.setVisibility(connected ? View.VISIBLE : View.GONE);
+
+        String last = Credentials.get(Credentials.KEY_LAST_STATUS);
+        if (connected && last.isEmpty()) {
+            last = "Connected as " + Credentials.get(Credentials.KEY_PUBLISHER_ID);
+        }
+
+        status.setText(last);
+        status.setVisibility(last.isEmpty() ? View.GONE : View.VISIBLE);
     }
 
     private OAuthFlow.Callback signInCallback() {
         return new OAuthFlow.Callback() {
             @Override
             public void onFinished(boolean success, String message) {
-                signIn.setEnabled(true);
-                signIn.setText("Sign in with Google");
+                action.setEnabled(true);
+                action.setText(Credentials.isConfigured() ? "Reconnect" : "Sign in with Google");
 
                 status.setText(message);
                 status.setVisibility(View.VISIBLE);
@@ -183,82 +175,24 @@ public final class CredentialsActivity extends Activity {
         };
     }
 
-    private LinearLayout buildManualSection() {
-        LinearLayout section = new LinearLayout(this);
-        section.setOrientation(LinearLayout.VERTICAL);
-
-        boolean optionalHeadingAdded = false;
-        for (int i = 0; i < FIELDS.length; i++) {
-            String[] field = FIELDS[i];
-            boolean required = !field[3].isEmpty();
-
-            if (!required && !optionalHeadingAdded) {
-                TextView optional = body("Optional");
-                optional.setTextColor(primary);
-                optional.setPadding(0, dp(24), 0, 0);
-                section.addView(optional);
-                optionalHeadingAdded = true;
-            }
-
-            TextView label = body(field[1]);
-            label.setTextColor(onSurface);
-            label.setPadding(0, dp(16), 0, dp(6));
-            section.addView(label);
-
-            section.addView(inputs[i] = filledField(field[2], Credentials.get(field[0])));
-        }
-
-        section.addView(filledButton("Save and start", new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                save();
-            }
-        }), marginTop(dp(28)));
-
-        return section;
-    }
-
-    /** Persists whatever is typed first, so a client entered by hand is available to the flow. */
     private void startSignIn() {
-        if (manualSection.getVisibility() == View.VISIBLE) persist();
+        persistClient();
 
         if (!Credentials.hasClient()) {
-            Toast.makeText(this, "An OAuth client id and secret are needed first.",
-                    Toast.LENGTH_LONG).show();
-            manualSection.setVisibility(View.VISIBLE);
+            Toast.makeText(this, "Fill in step 1 first.", Toast.LENGTH_LONG).show();
             return;
         }
 
-        signIn.setEnabled(false);
-        signIn.setText("Waiting for the browser…");
+        action.setEnabled(false);
+        action.setText("Waiting for the browser…");
 
         OAuthFlow.start(this, Credentials.effectiveClientId(), Credentials.effectiveClientSecret(),
                 signInCallback());
     }
 
-    private void persist() {
-        for (int i = 0; i < FIELDS.length; i++) {
-            Credentials.put(FIELDS[i][0], inputs[i].getText().toString());
-        }
-    }
-
-    private void save() {
-        persist();
-
-        StringBuilder missing = new StringBuilder();
-        for (String[] field : FIELDS) {
-            if (field[3].isEmpty() || !Credentials.get(field[0]).isEmpty()) continue;
-
-            if (missing.length() > 0) missing.append(", ");
-            missing.append(field[1]);
-        }
-
-        if (missing.length() > 0) {
-            Toast.makeText(this, "Still needed: " + missing, Toast.LENGTH_LONG).show();
-            return;
-        }
-
-        restartApp();
+    private void persistClient() {
+        Credentials.put(Credentials.KEY_CLIENT_ID, clientId.getText().toString());
+        Credentials.put(Credentials.KEY_CLIENT_SECRET, clientSecret.getText().toString());
     }
 
     /** The account is read while the app starts, so it has to go through its launch again. */
@@ -298,7 +232,8 @@ public final class CredentialsActivity extends Activity {
         TypedValue value = new TypedValue();
         if (!getTheme().resolveAttribute(identifier, value, true)) return fallback;
 
-        if (value.type >= TypedValue.TYPE_FIRST_COLOR_INT && value.type <= TypedValue.TYPE_LAST_COLOR_INT) {
+        if (value.type >= TypedValue.TYPE_FIRST_COLOR_INT
+                && value.type <= TypedValue.TYPE_LAST_COLOR_INT) {
             return value.data;
         }
 
@@ -317,20 +252,46 @@ public final class CredentialsActivity extends Activity {
         return view;
     }
 
+    private TextView step(String number, String title) {
+        TextView view = new TextView(this);
+        view.setText(number + " · " + title);
+        view.setTextColor(primary);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        view.setPadding(0, dp(32), 0, 0);
+        return view;
+    }
+
     private TextView body(String content) {
         TextView view = new TextView(this);
         view.setText(content);
         view.setTextColor(onSurfaceVariant);
         view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         view.setLineSpacing(dp(3), 1f);
-        view.setPadding(0, dp(10), 0, 0);
+        view.setPadding(0, dp(8), 0, 0);
+        return view;
+    }
+
+    private TextView label(String content) {
+        TextView view = body(content);
+        view.setTextColor(onSurface);
+        view.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        view.setPadding(0, dp(16), 0, dp(6));
+        return view;
+    }
+
+    private TextView link(String content) {
+        TextView view = body(content);
+        view.setTextColor(primary);
+        view.setGravity(Gravity.CENTER_HORIZONTAL);
+        view.setPadding(0, dp(20), 0, 0);
+        view.setClickable(true);
         return view;
     }
 
     /** A filled button: fully rounded, primary container, label in the matching on-primary role. */
-    private TextView filledButton(String label, View.OnClickListener listener) {
+    private TextView filledButton(String text, View.OnClickListener listener) {
         TextView button = new TextView(this);
-        button.setText(label);
+        button.setText(text);
         button.setTextColor(onPrimary);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
         button.setGravity(Gravity.CENTER);
@@ -348,7 +309,7 @@ public final class CredentialsActivity extends Activity {
     }
 
     /** A filled text field: surface variant behind, rounded top corners, as Material 3 draws them. */
-    private EditText filledField(String hint, String value) {
+    private EditText field(String hint, String value) {
         EditText input = new EditText(this);
         input.setSingleLine(true);
         input.setHint(hint);

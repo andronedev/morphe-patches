@@ -213,11 +213,30 @@ public final class Credentials {
      * @param original the intent the app built.
      */
     public static Intent signInIntentOrOriginal(Intent original) {
-        if (isConfigured() || context == null) return original;
+        if (context == null) return original;
 
         Intent intent = new Intent();
         intent.setClassName(context.getPackageName(), CredentialsActivity.class.getName());
         return intent;
+    }
+
+    /**
+     * Forgets the session but keeps the OAuth client, which is a property of the build rather than
+     * of whoever is signed in — so signing back in is one tap, with the fields already filled.
+     *
+     * <p>Clearing it is also what actually signs the user out: the app's own sign out leaves the
+     * fabricated account in place, since that account is served from here rather than from its
+     * database.
+     */
+    public static void signOut() {
+        put(KEY_REFRESH_TOKEN, "");
+        put(KEY_ACCESS_TOKEN, "");
+        put(KEY_PUBLISHER_ID, "");
+        put(KEY_EMAIL, "");
+        put(KEY_LAST_STATUS, "");
+        put(KEY_PENDING_CODE, "");
+        put(KEY_PENDING_VERIFIER, "");
+        put(KEY_PENDING_REDIRECT, "");
     }
 
     public static String publisherId() {

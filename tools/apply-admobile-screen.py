@@ -29,7 +29,7 @@ USER = "Lio/stark/admob/model/entity/User;"
 APP_STORE = "xf/i.smali"
 USER_DAO = "se/j.smali"
 USER_ENTITY = "io/stark/admob/model/entity/User.smali"
-LAUNCH_FRAGMENT = "Lio/stark/admob/ui/launch/LaunchFragment;"
+SIGN_IN_CLIENT = "Landroid/content/Intent;"
 APPLICATION = "io/stark/admob/App.smali"
 
 ANCHORS = {
@@ -240,44 +240,42 @@ def patch_sign_in_intent(smali_dir):
         r"[ \t]*move-result-object (v\d+)\n)"
     )
 
-    path = None
-    match = None
+    # Every call site is redirected, not just the launch screen's: the add account action builds the
+    # same intent, and once signed in it is the only way back to the form.
+    redirected = 0
+
     for directory, _, names in os.walk(smali_dir):
         for name in names:
             if not name.endswith(".smali"):
                 continue
 
-            candidate = os.path.join(directory, name)
-            with open(candidate) as handle:
-                contents = handle.read()
+            path = os.path.join(directory, name)
+            with open(path) as handle:
+                source = handle.read()
 
-            if LAUNCH_FRAGMENT not in contents:
+            if SIGN_IN_CLIENT not in source:
                 continue
 
-            found = pattern.search(contents)
-            if found:
-                path, match, source = candidate, found, contents
-                break
-        if match:
-            break
+            patched, count = pattern.subn(
+                lambda found: found.group(1)
+                + f"""
+    invoke-static {{{found.group(2)}}}, {EXTENSION}->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
 
-    if not match:
-        sys.exit("sign-in intent call not found")
-
-    register = match.group(2)
-    source = source.replace(
-        match.group(1),
-        match.group(1)
-        + f"""
-    invoke-static {{{register}}}, {EXTENSION}->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
-
-    move-result-object {register}
+    move-result-object {found.group(2)}
 """,
-        1,
-    )
+                source,
+            )
 
-    with open(path, "w") as handle:
-        handle.write(source)
+            if not count:
+                continue
+
+            with open(path, "w") as handle:
+                handle.write(patched)
+
+            redirected += count
+
+    if not redirected:
+        sys.exit("sign-in intent call not found")
 
 
 def patch_manifest(decoded_dir):

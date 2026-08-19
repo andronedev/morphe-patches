@@ -169,17 +169,52 @@ val customCredentialsPatch = bytecodePatch(
             throw PatchException("Could not find the sign-in intent call.")
         }
 
-        val signInIntentRegister = signInIntentMethod
-            .getInstruction<OneRegisterInstruction>(signInIntentIndex + 1)
-            .registerA
+        val signInIntentReference = signInIntentMethod
+            .getInstruction<com.android.tools.smali.dexlib2.iface.instruction.Instruction>(signInIntentIndex)
+            .getReference<MethodReference>()
+            ?: throw PatchException("Could not resolve the sign-in intent call.")
 
-        signInIntentMethod.addInstructions(
-            signInIntentIndex + 2,
-            """
-                invoke-static { v$signInIntentRegister }, $CREDENTIALS_CLASS_DESCRIPTOR->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
-                move-result-object v$signInIntentRegister
-            """,
-        )
+        // Every call site is redirected, not just the launch screen's: the add account action
+        // builds the same intent, and once signed in it is the only way back to the form — which is
+        // where disconnecting lives, since the app's own sign out cannot forget an account that is
+        // served from the extension rather than from its database.
+        var redirected = 0
+        classDefForEach { classDef ->
+            classDef.methods.forEach { method ->
+                val callIndices = method.implementation
+                    ?.instructions
+                    ?.withIndex()
+                    ?.filter { (_, instruction) ->
+                        instruction.opcode == Opcode.INVOKE_VIRTUAL &&
+                            instruction.getReference<MethodReference>() == signInIntentReference
+                    }
+                    ?.map { it.index }
+                    .orEmpty()
+
+                if (callIndices.isEmpty()) return@forEach
+
+                val mutableMethod = mutableClassDefBy(classDef).findMutableMethodOf(method)
+
+                callIndices.asReversed().forEach { index ->
+                    val register = mutableMethod
+                        .getInstruction<OneRegisterInstruction>(index + 1)
+                        .registerA
+
+                    mutableMethod.addInstructions(
+                        index + 2,
+                        """
+                            invoke-static { v$register }, $CREDENTIALS_CLASS_DESCRIPTOR->signInIntentOrOriginal(Landroid/content/Intent;)Landroid/content/Intent;
+                            move-result-object v$register
+                        """,
+                    )
+                    redirected++
+                }
+            }
+        }
+
+        if (redirected == 0) {
+            throw PatchException("Could not redirect any sign-in intent call.")
+        }
 
         // 5. checkUser() sends the app to the login screen when the user DAO reports no selected
         //    account, so that query hands back a fabricated one. The DAO carries no strings of its

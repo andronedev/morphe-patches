@@ -209,7 +209,7 @@ public final class OAuthFlow {
             }
 
             Credentials.put(Credentials.KEY_REFRESH_TOKEN, refreshToken);
-            Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
+            Credentials.storeAccessToken(accessToken);
 
             // Spent the moment Google answers, and a second attempt with it can only be refused.
             // Anything left to do is done with the tokens, so the code is dropped here rather than
@@ -245,7 +245,7 @@ public final class OAuthFlow {
                     return;
                 }
 
-                Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
+                Credentials.storeAccessToken(accessToken);
             }
 
             String accounts = get(ACCOUNTS_ENDPOINT, accessToken);
@@ -310,7 +310,7 @@ public final class OAuthFlow {
                     return;
                 }
 
-                Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
+                Credentials.storeAccessToken(accessToken);
                 report.append("refresh: ok\n");
 
                 String accounts = get(ACCOUNTS_ENDPOINT, accessToken);
@@ -347,6 +347,37 @@ public final class OAuthFlow {
         Credentials.put(Credentials.KEY_LAST_STATUS, text);
 
         activity.runOnUiThread(() -> callback.onFinished(false, text));
+    }
+
+    /**
+     * Trades the refresh token for a new access token and stores it.
+     *
+     * <p>Called from {@link Credentials#accessToken()} when what is stored has aged out, so that
+     * anything reaching for a token gets a usable one rather than an expired one. Runs on the
+     * caller's thread, which is never the main one.
+     *
+     * @return the new token, or null if Google refused or could not be reached.
+     */
+    static String refreshAccessToken() {
+        String refresh = Credentials.get(Credentials.KEY_REFRESH_TOKEN);
+        if (refresh.isEmpty() || !Credentials.hasClient()) return null;
+
+        try {
+            String response = postForm(TOKEN_ENDPOINT, tokenRequest(
+                    "&refresh_token=" + encode(refresh) + "&grant_type=refresh_token"));
+
+            String token = jsonString(response, "access_token");
+            if (token == null) {
+                Log.w(TAG, "refresh refused: " + trim(response));
+                return null;
+            }
+
+            Credentials.storeAccessToken(token);
+            return token;
+        } catch (Exception exception) {
+            Log.w(TAG, "could not refresh the access token", exception);
+            return null;
+        }
     }
 
     /** Both token requests are signed with the same client; only the grant differs. */

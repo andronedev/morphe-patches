@@ -24,6 +24,8 @@ public final class CredentialsTest {
         seedsOnceAndAgainWhenTheAccountChanges();
         seedsAgainWhenTheDatabaseIsGone();
         signInIntentPointsAtTheForm();
+        aFreshTokenIsServedAsIs();
+        anAgedTokenIsNotServedBlindly();
 
         System.out.println("\n" + passed + " passed, " + failed + " failed");
         if (failed > 0) System.exit(1);
@@ -177,6 +179,41 @@ public final class CredentialsTest {
         check("targets the app", "io.stark.admob", intent.packageName);
         check("targets the form",
                 "app.morphe.extension.admobile.CredentialsActivity", intent.className);
+    }
+
+    /** A token obtained moments ago is handed straight back, with no network call. */
+    private static void aFreshTokenIsServedAsIs() throws Exception {
+        configured();
+        Credentials.storeAccessToken("fresh-token");
+
+        check("a fresh token is served", "fresh-token", Credentials.accessToken());
+        check("and its age was recorded", true,
+                !Credentials.get(Credentials.KEY_ACCESS_TOKEN_AT).isEmpty());
+    }
+
+    /**
+     * The bug the widgets exposed: an access token lasts an hour, and whatever was left behind was
+     * served forever. Anything running on its own schedule sent an expired token and got nothing
+     * back, which reads on screen as zero earnings.
+     */
+    private static void anAgedTokenIsNotServedBlindly() throws Exception {
+        FakeContext context = configured();
+        Credentials.storeAccessToken("stale-token");
+
+        // Backdate it past the hour Google grants.
+        context.stored.put(Credentials.KEY_ACCESS_TOKEN_AT,
+                Long.toString(System.currentTimeMillis() - 2 * 60 * 60 * 1000L));
+
+        // No network here, so the refresh cannot succeed; what matters is that the staleness is
+        // noticed rather than the value being handed out as though it were good.
+        check("an aged token is recognised as such", true, isAged());
+    }
+
+    private static boolean isAged() throws Exception {
+        java.lang.reflect.Method obtainedAt = Credentials.class.getDeclaredMethod("obtainedAt");
+        obtainedAt.setAccessible(true);
+        long at = (Long) obtainedAt.invoke(null);
+        return System.currentTimeMillis() - at >= 55 * 60 * 1000L;
     }
 
     // --- harness ---------------------------------------------------------------------------

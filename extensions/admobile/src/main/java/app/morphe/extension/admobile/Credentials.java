@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.database.sqlite.SQLiteDatabase;
+import android.os.Looper;
 import android.util.Log;
 
 import java.io.Closeable;
@@ -45,6 +46,9 @@ public final class Credentials {
      * alongside the refresh token and kept current from the app's own writes.
      */
     public static final String KEY_ACCESS_TOKEN = "access_token";
+
+    /** When the access token above was obtained, so its age can be judged before it is served. */
+    public static final String KEY_ACCESS_TOKEN_AT = "access_token_at";
     public static final String KEY_PUBLISHER_ID = "publisher_id";
     public static final String KEY_TIME_ZONE = "time_zone";
     public static final String KEY_CURRENCY = "currency";
@@ -85,6 +89,9 @@ public final class Credentials {
     /** Names the OkHttp authenticators look up in the pre-DataStore storage. */
     private static final String LEGACY_REFRESH_TOKEN = "user_token_refresh";
     private static final String LEGACY_ACCESS_TOKEN = "user_token_access";
+
+    /** Google issues access tokens for an hour; refreshed early to leave room for a slow call. */
+    private static final long ACCESS_TOKEN_LIFETIME_MS = 55 * 60 * 1000L;
 
     private static Context context;
     private static SharedPreferences preferences;
@@ -286,7 +293,7 @@ public final class Credentials {
             return isConfigured() ? get(KEY_REFRESH_TOKEN) : null;
         }
         if (name.startsWith(DATA_STORE_ACCESS_TOKEN_PREFIX)) {
-            return isConfigured() ? get(KEY_ACCESS_TOKEN) : null;
+            return isConfigured() ? accessToken() : null;
         }
 
         return null;
@@ -305,7 +312,7 @@ public final class Credentials {
             return isConfigured() ? get(KEY_REFRESH_TOKEN) : null;
         }
         if (LEGACY_ACCESS_TOKEN.equals(name)) {
-            return isConfigured() ? get(KEY_ACCESS_TOKEN) : null;
+            return isConfigured() ? accessToken() : null;
         }
 
         return null;
@@ -322,10 +329,55 @@ public final class Credentials {
         if (name == null || value == null || value.isEmpty()) return;
 
         if (LEGACY_ACCESS_TOKEN.equals(name) || name.startsWith(DATA_STORE_ACCESS_TOKEN_PREFIX)) {
-            put(KEY_ACCESS_TOKEN, value);
+            storeAccessToken(value);
         } else if (LEGACY_REFRESH_TOKEN.equals(name)
                 || name.startsWith(DATA_STORE_REFRESH_TOKEN_PREFIX)) {
             put(KEY_REFRESH_TOKEN, value);
+        }
+    }
+
+    /**
+     * The access token to hand out, refreshed first if it is too old to be worth sending.
+     *
+     * <p>An access token lasts an hour. The app refreshes its own whenever a request comes back
+     * unauthorised, so while somebody is using it the stored value stays current. Nothing else does:
+     * a home screen widget updates on its own schedule, reads whatever was left behind, and sends an
+     * expired token. The request comes back with no data, which reads on screen as zero earnings.
+     *
+     * <p>Refreshing here means every caller gets a usable token, whichever process it runs in and
+     * however long ago the app was last opened.
+     */
+    public static synchronized String accessToken() {
+        String token = get(KEY_ACCESS_TOKEN);
+
+        long age = System.currentTimeMillis() - obtainedAt();
+        if (!token.isEmpty() && age >= 0 && age < ACCESS_TOKEN_LIFETIME_MS) return token;
+
+        // Refreshing is a network call, so it cannot happen on the main thread. Callers there get
+        // what is stored; the request that follows fails once and the app's own authenticator
+        // refreshes from its background thread.
+        if (Looper.getMainLooper() == Looper.myLooper()) return token;
+
+        String refreshed = OAuthFlow.refreshAccessToken();
+        return refreshed == null ? token : refreshed;
+    }
+
+    /** Records a token together with the moment it was issued. */
+    public static void storeAccessToken(String token) {
+        if (token == null || token.isEmpty() || preferences == null) return;
+
+        preferences.edit()
+                .putString(KEY_ACCESS_TOKEN, token.trim())
+                .putString(KEY_ACCESS_TOKEN_AT, Long.toString(System.currentTimeMillis()))
+                .commit();
+    }
+
+    private static long obtainedAt() {
+        try {
+            String at = get(KEY_ACCESS_TOKEN_AT);
+            return at.isEmpty() ? 0L : Long.parseLong(at);
+        } catch (NumberFormatException exception) {
+            return 0L;
         }
     }
 
@@ -364,7 +416,8 @@ public final class Credentials {
     public static void signOut() {
         clearAccount();
 
-        clear(KEY_REFRESH_TOKEN, KEY_ACCESS_TOKEN, KEY_PUBLISHER_ID, KEY_LAST_STATUS,
+        clear(KEY_REFRESH_TOKEN, KEY_ACCESS_TOKEN, KEY_ACCESS_TOKEN_AT, KEY_PUBLISHER_ID,
+                KEY_LAST_STATUS,
                 KEY_PENDING_CODE, KEY_PENDING_VERIFIER, KEY_PENDING_REDIRECT);
     }
 

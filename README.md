@@ -98,10 +98,14 @@ in the browser and the publisher id, currency and time zone are read back automa
 
 #### Without the Morphe toolchain
 
-`tools/apply-admobile-screen.py` performs the same edits on an apktool-decoded APK. The extension
-has to be compiled and injected by hand; the script's docstring gives the full sequence. Its anchors
-are the obfuscated names of AdMobile 2.4.8, so it needs updating for later versions, whereas the
-patches find theirs through fingerprints.
+`tools/apply-admobile.py` performs the same edits on an apktool-decoded APK. The extension has to
+be compiled and injected by hand; the script's docstring gives the full sequence. Its anchors are
+the obfuscated names of AdMobile 2.4.8, so it needs updating for later versions, whereas the patches
+find theirs through fingerprints.
+
+Decode a **universal** APK. AdMobile ships as a split set, and the base split alone carries a
+`res/xml/splits0.xml` and none of the density resources, which installs as "app not compatible with
+this device". Merge the set first (APKEditor and similar tools do this).
 
 `tools/check-admobile-api.py` replays the same API calls from a desktop, which tells you whether a
 problem is in the build or in the Google project.

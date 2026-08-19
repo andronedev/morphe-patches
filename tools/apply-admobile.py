@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
-"""Apply the extension-backed AdMobile credential patches to an apktool-decoded APK.
+"""Apply the AdMobile patches to an apktool-decoded APK.
 
-Same edits as Custom AdMob Credentials and AdMob Credentials Screen, for when the Morphe toolchain
-is unavailable. Unlike the patches, the extension dex has to be built and injected by hand:
+Same edits as Hide Ads, Disable Ad Requests, Pro Unlock, Pro Badge, Custom AdMob Credentials and
+AdMob Credentials Screen, for when the Morphe toolchain is unavailable. Unlike the patches, the
+extension dex has to be built and injected by hand:
 
     javac --release 8 -classpath android.jar -d classes \
         extensions/admobile/src/main/java/app/morphe/extension/admobile/*.java
     java -cp r8.jar com.android.tools.r8.D8 --release --min-api 23 --lib android.jar \
         --output dex $(find classes -name '*.class')
 
-    java -jar apktool.jar d -o dec AdMobile.apk
-    python3 tools/apply-admobile-screen.py dec
+    java -jar apktool.jar d -o dec AdMobile.apk           # a universal APK, not one split of a set
+    python3 tools/apply-admobile.py dec
     java -jar apktool.jar b -o AdMobile-patched.apk dec
     zip -j AdMobile-patched.apk dex/classes.dex           # rename to the next free classesN.dex
     java -jar uber-apk-signer.jar --apks AdMobile-patched.apk --allowResign
@@ -33,6 +34,14 @@ USER_DAO = "se/j.smali"
 USER_ENTITY = "io/stark/admob/model/entity/User.smali"
 APPLICATION = "io/stark/admob/App.smali"
 ACCOUNT_MANAGER = "af/m.smali"
+AD_NATIVE_VIEW = "io/stark/admob/ui/widget/ads/AdNativeView.smali"
+BILLING = "ui/n.smali"
+
+PROFILE_LAYOUT = "res/layout/fragment_profile.xml"
+STRINGS = "res/values/strings.xml"
+
+AD_UNIT_RESOURCES = ("ad_home_native", "ad_apps_native", "ad_app_info_native")
+PREMIUM_ACTIVE = "morphe_premium_active"
 
 INTENT = "Landroid/content/Intent;"
 
@@ -140,6 +149,19 @@ EDITS = {
     move-result-object p1
 """,
     ),
+    # The loaded ad is released and never bound, so the view stays gone. The class is referenced
+    # from layout XML and setNativeAd is kept by the default ProGuard rule for set* on View
+    # subclasses, which is what makes both names survive obfuscation.
+    "hide_ads": (
+        AD_NATIVE_VIEW,
+        ".method public final setNativeAd(Lcom/google/android/gms/ads/nativead/NativeAd;)V\n"
+        "    .locals 19\n",
+        """
+    invoke-virtual/range {p1 .. p1}, Lcom/google/android/gms/ads/nativead/NativeAd;->destroy()V
+
+    return-void
+""",
+    ),
     # checkUser() sends the app to the login screen when this comes back null. Only stand in once
     # credentials exist, so an unconfigured build still reaches the login screen.
     "selected_user": (
@@ -211,6 +233,87 @@ SIGN_IN_INTENT = re.compile(
     r"(?:[ \t]*\n|[ \t]*\.line \d+\n)*"
     r"[ \t]*move-result-object (v\d+)\n)"
 )
+
+
+def patch_ad_units(decoded_dir):
+    """An empty ad unit id makes the request fail instead of returning an ad.
+
+    AdLoader.Builder only rejects a null context. Resource names are never obfuscated, which makes
+    this the version resilient half of the ad removal.
+    """
+    path = os.path.join(decoded_dir, STRINGS)
+    with open(path, encoding="utf-8") as handle:
+        source = handle.read()
+
+    for name in AD_UNIT_RESOURCES:
+        source, count = re.subn(
+            rf'<string name="{name}">[^<]*</string>', f'<string name="{name}" />', source, count=1
+        )
+        if not count and f'<string name="{name}" />' not in source:
+            sys.exit(f"ad unit resource {name} not found")
+
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(source)
+
+
+def patch_pro_unlock(smali_dir):
+    """Force both writes to the pro flag: the one after a failed verification, and the one taken
+    when no purchase is persisted at all. The second is what makes it work on a device that never
+    bought anything. The method is found by the log prefix it emits, a string R8 leaves alone.
+    """
+    path = os.path.join(smali_dir, BILLING)
+    with open(path) as handle:
+        source = handle.read()
+
+    marker = 'const-string v4, "Verify App Purchase [playKey: "'
+    if marker not in source:
+        sys.exit("pro flag verification log not found")
+
+    head, tail = source.split(marker, 1)
+    tail, count = re.subn(
+        r"(    iput-boolean (v\d+),[^\n]*\n)",
+        lambda found: f"    const/16 {found.group(2)}, 0x1\n\n" + found.group(1),
+        tail,
+    )
+    if not count:
+        sys.exit("pro flag writes not found")
+
+    with open(path, "w") as handle:
+        handle.write(head + marker + tail)
+
+
+def patch_pro_badge(decoded_dir):
+    """The app's own indicator is a coloured ring around the avatar, which reads as decoration.
+
+    The button that used to sell the subscription is on the same screen and already carries the
+    premium icon, so its label is where the state belongs.
+    """
+    path = os.path.join(decoded_dir, STRINGS)
+    with open(path, encoding="utf-8") as handle:
+        source = handle.read()
+
+    if PREMIUM_ACTIVE not in source:
+        source = source.replace(
+            "</resources>", f'    <string name="{PREMIUM_ACTIVE}">Premium active</string>\n</resources>'
+        )
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(source)
+
+    path = os.path.join(decoded_dir, PROFILE_LAYOUT)
+    with open(path, encoding="utf-8") as handle:
+        source = handle.read()
+
+    source, count = re.subn(
+        r'(android:id="@id/btn_premium"[^>]*?)android:text="@string/premium"',
+        rf'\1android:text="@string/{PREMIUM_ACTIVE}"',
+        source,
+        count=1,
+    )
+    if not count:
+        sys.exit("premium button not found")
+
+    with open(path, "w", encoding="utf-8") as handle:
+        handle.write(source)
 
 
 def patch_sign_in_intent(smali_dir):
@@ -314,8 +417,11 @@ def main():
 
     patch_sign_in_intent(smali_dir)
     patch_manifest(decoded_dir)
+    patch_ad_units(decoded_dir)
+    patch_pro_unlock(smali_dir)
+    patch_pro_badge(decoded_dir)
 
-    print(f"applied {len(EDITS) + 3} edits; now build, inject the extension dex, and sign")
+    print("applied every edit; now build, inject the extension dex, and sign")
 
 
 if __name__ == "__main__":

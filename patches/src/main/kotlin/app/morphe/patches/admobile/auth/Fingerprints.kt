@@ -123,3 +123,18 @@ internal object SignInIntentFingerprint : Fingerprint(
             }
     },
 )
+
+/**
+ * `setCurrencySymbol`, the only writer of the prefix the report formatter puts in front of every
+ * amount. It special cases the dollar sign and appends a space to anything else, which is what
+ * makes it recognisable: a one argument setter holding a single string field, carrying both
+ * literals.
+ */
+internal object ReportCurrencySymbolFingerprint : Fingerprint(
+    returnType = "V",
+    parameters = listOf("Ljava/lang/String;"),
+    strings = listOf("$", " "),
+    custom = { _, classDef ->
+        classDef.fields.singleOrNull()?.type == "Ljava/lang/String;"
+    },
+)

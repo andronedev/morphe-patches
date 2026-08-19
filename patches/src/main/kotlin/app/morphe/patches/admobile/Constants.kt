@@ -78,4 +78,12 @@ internal object Constants {
 
     /** Name given to the factory this patch adds to the user entity. */
     const val SYNTHETIC_USER_METHOD_NAME = "morpheSyntheticUser"
+
+    /** Profile screen, whose premium button is relabelled once pro is unlocked. */
+    const val PROFILE_LAYOUT_RESOURCE = "res/layout/fragment_profile.xml"
+    const val PREMIUM_BUTTON_ID = "@id/btn_premium"
+
+    /** String resource this patch adds, holding that label. */
+    const val PREMIUM_ACTIVE_STRING_NAME = "morphe_premium_active"
+    const val PREMIUM_ACTIVE_STRING_VALUE = "Premium active"
 }

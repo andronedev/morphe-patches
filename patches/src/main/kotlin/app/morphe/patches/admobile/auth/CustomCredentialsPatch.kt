@@ -193,7 +193,11 @@ val customCredentialsPatch = bytecodePatch(
 
                 if (callIndices.isEmpty()) return@forEach
 
-                val mutableMethod = mutableClassDefBy(classDef).findMutableMethodOf(method)
+                val mutableMethod = mutableClassDefBy(classDef).methods.first {
+                    it.name == method.name &&
+                        it.parameterTypes == method.parameterTypes &&
+                        it.returnType == method.returnType
+                }
 
                 callIndices.asReversed().forEach { index ->
                     val register = mutableMethod
@@ -316,6 +320,19 @@ val customCredentialsPatch = bytecodePatch(
 
                 :original
                 nop
+            """,
+        )
+
+        // 7. The currency symbol. The app stores it when an account is selected through its own
+        //    sign in, which the patched app never runs, so the setting stayed absent and the
+        //    formatter — which appends a space to whatever it is handed — printed the literal text
+        //    "null" in front of every amount and on the chart axis. The account's currency is known
+        //    to the extension, so the symbol is derived from it whenever nothing was stored.
+        ReportCurrencySymbolFingerprint.method.addInstructions(
+            0,
+            """
+                invoke-static { p1 }, $CREDENTIALS_CLASS_DESCRIPTOR->currencySymbolOrOriginal(Ljava/lang/String;)Ljava/lang/String;
+                move-result-object p1
             """,
         )
 

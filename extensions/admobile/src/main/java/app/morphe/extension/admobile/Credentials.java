@@ -7,6 +7,8 @@ import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
 
 import java.io.File;
+import java.util.Currency;
+import java.util.Locale;
 
 /**
  * Credentials the patched AdMobile signs its AdMob API calls with.
@@ -327,5 +329,33 @@ public final class Credentials {
     public static String currency() {
         String currency = get(KEY_CURRENCY);
         return currency.isEmpty() ? "USD" : currency;
+    }
+
+    /**
+     * Answers the currency symbol every formatted amount is prefixed with.
+     *
+     * <p>The app stores that symbol when an account is selected through its own sign in, a path the
+     * patched app never takes, so the stored value stays absent. The formatter appends a space to
+     * whatever it is handed, which turned a missing symbol into the literal text {@code null} in
+     * front of every amount and on the chart axis.
+     *
+     * <p>The account's currency is known here, so the symbol is derived from it.
+     *
+     * @param original the symbol the app read from its settings.
+     */
+    public static String currencySymbolOrOriginal(String original) {
+        if (original != null && !original.trim().isEmpty()) return original;
+        if (!isConfigured()) return original;
+
+        String code = currency();
+        try {
+            String symbol = Currency.getInstance(code).getSymbol(Locale.US);
+            if (symbol != null && !symbol.isEmpty()) return symbol;
+        } catch (Exception exception) {
+            Log.w(TAG, "no symbol for " + code, exception);
+        }
+
+        // The code itself, which is what the app falls back to for a currency it has no symbol for.
+        return code;
     }
 }

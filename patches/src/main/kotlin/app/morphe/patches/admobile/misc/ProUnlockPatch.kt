@@ -18,6 +18,8 @@ val proUnlockPatch = bytecodePatch(
 ) {
     compatibleWith(COMPATIBILITY_ADMOBILE)
 
+    dependsOn(proBadgePatch)
+
     execute {
         val method = VerifyAppPurchaseFingerprint.method
 

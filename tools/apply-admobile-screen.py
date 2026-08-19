@@ -32,6 +32,9 @@ USER_ENTITY = "io/stark/admob/model/entity/User.smali"
 SIGN_IN_CLIENT = "Landroid/content/Intent;"
 APPLICATION = "io/stark/admob/App.smali"
 ACCOUNT_MANAGER = "af/m.smali"
+REPORT_MANAGER = "af/n.smali"
+PROFILE_LAYOUT = "res/layout/fragment_profile.xml"
+STRINGS = "res/values/strings.xml"
 
 ANCHORS = {
     "datastore_read": ".method public final g(Ll1/d;Lyh/c;)Ljava/lang/Object;\n    .locals 7\n",
@@ -44,6 +47,7 @@ ANCHORS = {
     "selected_user": ".method public final b(Lyh/c;)Ljava/lang/Object;\n    .locals 4\n",
     "on_create": ".method public final onCreate()V\n    .locals 7\n",
     "sign_out": ".method public final j(Lyh/c;)Ljava/lang/Object;\n    .locals 12\n",
+    "currency_symbol": ".method public final c(Ljava/lang/String;)V\n    .locals 1\n",
 }
 
 
@@ -56,6 +60,7 @@ ANCHOR_FILES = {
     "selected_user": USER_DAO,
     "on_create": APPLICATION,
     "sign_out": ACCOUNT_MANAGER,
+    "currency_symbol": REPORT_MANAGER,
 }
 
 
@@ -150,6 +155,24 @@ def patch_sign_out(smali_dir):
         ANCHORS["sign_out"],
         f"""
     invoke-static {{}}, {EXTENSION}->signOut()V
+""",
+    )
+
+
+def patch_currency_symbol(smali_dir):
+    """The app stores the currency symbol when an account is selected through its own sign in.
+
+    The patched app never takes that path, so the setting stayed absent, and the formatter — which
+    appends a space to whatever it is handed — printed the literal text "null" in front of every
+    amount and on the chart axis.
+    """
+    insert_after(
+        os.path.join(smali_dir, REPORT_MANAGER),
+        ANCHORS["currency_symbol"],
+        f"""
+    invoke-static {{p1}}, {EXTENSION}->currencySymbolOrOriginal(Ljava/lang/String;)Ljava/lang/String;
+
+    move-result-object p1
 """,
     )
 
@@ -354,13 +377,14 @@ def main():
     patch_legacy_read(smali_dir)
     patch_writes(smali_dir)
     patch_sign_out(smali_dir)
+    patch_currency_symbol(smali_dir)
     patch_constructor(smali_dir)
     add_synthetic_user(smali_dir)
     patch_sign_in_intent(smali_dir)
     patch_selected_user_query(smali_dir)
     patch_manifest(decoded_dir)
 
-    print("applied 11 edits; now build, inject the extension dex, and sign")
+    print("applied 12 edits; now build, inject the extension dex, and sign")
 
 
 if __name__ == "__main__":

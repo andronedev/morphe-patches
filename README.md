@@ -75,6 +75,12 @@ there, that a hook injected into a suspend function guards the parameters Kotlin
 resumes, that an unrecognised key still falls through to the app's own storage, and that the ads,
 pro flag and resources came out as intended.
 
+### Running a build
+
+`.claude/skills/android-emulator-sandbox/` boots an Android emulator, installs an APK and drives it
+from a container with no KVM, which is where a patched build can be tried before it reaches a phone.
+Its scripts are usable on their own; the SKILL.md is the reasoning behind them.
+
 ## Transit
 
 On recent Transit versions, any re-signed APK may break in-app maps. Use **Custom Maps API Key**

@@ -64,10 +64,12 @@ private fun MutableMethod.hookStoreRead(keyNameField: String) = addInstructionsW
 )
 
 @Suppress("unused")
-val customCredentialsPatch = bytecodePatch(
-    name = "Custom AdMob Credentials",
-    description = "Sign in with your own Google OAuth client and refresh token, entered in the " +
-        "app, instead of the Google Sign-In flow that a re-signed APK cannot use.",
+val serverlessSignInPatch = bytecodePatch(
+    name = "Serverless Sign-In",
+    description = "Sign in with your own Google OAuth client, so the app talks to Google directly " +
+        "and to nobody else. No developer backend, no Firebase session, no third party holding " +
+        "your tokens or seeing your earnings, and no Google Sign-In that a re-signed APK cannot " +
+        "complete.",
 ) {
     compatibleWith(COMPATIBILITY_ADMOBILE)
 

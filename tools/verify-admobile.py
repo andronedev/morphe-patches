@@ -19,10 +19,9 @@ import re
 import sys
 
 EXTENSION = "Lapp/morphe/extension/admobile/Credentials;"
+PRO_FLAG = "Lxf/i;->g:Z"
 
 SMALI = "smali_classes3"
-STRINGS = "res/values/strings.xml"
-PROFILE_LAYOUT = "res/layout/fragment_profile.xml"
 
 # file -> methods that must call into the extension.
 HOOKS = {
@@ -32,8 +31,6 @@ HOOKS = {
     "se/j.smali": ["isConfigured"],
     "io/stark/admob/App.smali": ["init"],
 }
-
-AD_UNITS = ("ad_home_native", "ad_apps_native", "ad_app_info_native")
 
 failures = []
 
@@ -101,42 +98,42 @@ def check_fallthrough(root):
                      f"checking it, so an unrecognised key never reaches the app's storage")
 
 
+
+
+
 def check_pro_unlock(root):
-    source = read(root, os.path.join(SMALI, "ui/n.smali"))
+    """No read of the pro flag may survive, in any class.
 
-    writes = re.findall(r"(const/16 (v\d+), 0x1\n\n    )?iput-boolean (v\d+),", source)
-    forced = [write for write in writes if write[0]]
+    A single one left behind is a gate that answers no, and the process that hits it decides the
+    user never paid — which is how the home screen widgets came back empty while the app itself
+    looked fine.
+    """
+    remaining = []
 
-    if len(forced) < 2:
-        fail(f"pro flag: {len(forced)} of {len(writes)} writes forced, expected both")
+    for directory, _, names in os.walk(os.path.join(root, SMALI)):
+        for name in names:
+            if not name.endswith(".smali"):
+                continue
 
+            path = os.path.join(directory, name)
+            with open(path, encoding="utf-8", errors="replace") as handle:
+                source = handle.read()
 
-def check_hide_ads(root):
-    body = read(root, os.path.join(SMALI, "io/stark/admob/ui/widget/ads/AdNativeView.smali"))
-    match = re.search(r"^\.method public final setNativeAd.*?^\.end method", body, re.M | re.S)
+            for match in re.finditer(rf"iget-boolean v\d+, v\d+, {re.escape(PRO_FLAG)}", source):
+                remaining.append(os.path.relpath(path, root))
 
-    if not match:
-        fail("hide ads: setNativeAd not found")
-        return
+    for path in sorted(set(remaining)):
+        fail(f"{path}: still reads the pro flag instead of being answered true")
 
-    head = match.group(0).split("return-void")[0]
-    if "destroy()V" not in head:
-        fail("hide ads: setNativeAd does not release the ad before returning")
-
-
-def check_resources(root):
-    strings = read(root, STRINGS)
-
-    for name in AD_UNITS:
-        if not re.search(rf'<string name="{name}"\s*/>', strings):
-            fail(f"ad unit {name} is not blank")
-
-    if "morphe_premium_active" not in strings:
-        fail("the premium label string is missing")
-
-    layout = read(root, PROFILE_LAYOUT)
-    if 'android:text="@string/morphe_premium_active"' not in layout:
-        fail("the premium button does not carry the label")
+    # The screens observe a LiveData, not the field, and it starts empty.
+    owner = read(root, os.path.join(SMALI, "me/h.smali"))
+    seeded = re.search(
+        r"iput-object p\d+, p\d+, Lme/h;->G:Landroidx/lifecycle/MutableLiveData;\s*"
+        r"sget-object \S+ Ljava/lang/Boolean;->TRUE",
+        owner,
+    )
+    if not seeded:
+        fail("the pro LiveData is not seeded true, so a cold start still looks unpaid")
 
 
 def check_manifest(root):
@@ -162,8 +159,6 @@ def main():
     check_suspend_guards(root)
     check_fallthrough(root)
     check_pro_unlock(root)
-    check_hide_ads(root)
-    check_resources(root)
     check_manifest(root)
 
     for failure in failures:

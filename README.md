@@ -6,19 +6,13 @@ Patch definitions for Transit and AdMobile.
 
 ### AdMobile (`io.stark.admob`)
 
-- **Custom AdMob Credentials**
-  - Description: Sign in with your own OAuth client and refresh token, entered in the app
-  - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/auth/CustomCredentialsPatch.kt`
+- **Serverless Sign-In**
+  - Description: Sign in with your own Google OAuth client, so the app talks to Google and nobody else
+  - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/auth/ServerlessSignInPatch.kt`
   - Extension: `extensions/admobile/`
 - **Pro Unlock**
-  - Description: Unlock all pro features in AdMobile
+  - Description: Unlock every pro feature, in every process that checks for one
   - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/misc/ProUnlockPatch.kt`
-- **Hide Ads**
-  - Description: Hide the native ads shown on the home, apps, app info and mediation screens
-  - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/ads/HideAdsPatch.kt`
-- **Disable Ad Requests**
-  - Description: Clear the AdMob ad unit ids so no ad is ever requested from the network
-  - Source: `patches/src/main/kotlin/app/morphe/patches/admobile/ads/DisableAdRequestsPatch.kt`
 
 ### Transit (`com.thetransitapp.droid`)
 
@@ -31,17 +25,40 @@ Patch definitions for Transit and AdMobile.
 
 ## AdMobile
 
-Hide Ads, Disable Ad Requests and Pro Unlock need no setup. Pro Unlock also hides the ads on its own,
-since the ad loader sits behind the same flag; the two ad patches are the narrower option. Pro Badge
-comes with Pro Unlock and relabels the profile screen's premium button.
+Two patches. Both are worth having; neither needs the other.
 
-### Signing in on a re-signed build
+### Pro Unlock
+
+Pro is one boolean field, written only by a local signature check against the last Play purchase.
+Everything else reads it: the real report charts instead of demo data, the ad unit and ad source
+breakdowns, more than one account, the premium accents, the home screen widgets, and the branch
+that decides whether to load an ad.
+
+The patch answers **every read** of that field with true, rather than forcing the one write. That
+distinction matters: the write only happens once the billing client processes a purchase list, so
+anything that starts the process on its own — a widget worker, most visibly — used to read the flag
+before it was set and behave as if you had never paid. It also seeds the LiveData the screens
+observe, which is created empty, so a cold start looks paid from the first frame instead of after
+billing connects.
+
+Because the ad loader sits behind that same flag, no ad is ever requested or drawn. There is
+nothing else to disable, and nothing cosmetic is added: the app simply does what it does for
+someone who bought the subscription.
+
+### Serverless Sign-In
 
 A re-signed APK cannot use Google Sign-In: Google checks the calling package against the SHA-1 the
 OAuth client was registered with and answers `DEVELOPER_ERROR` (10). microG does not help.
 
-**Custom AdMob Credentials** replaces it with your own OAuth client. Everything past the
-authorization code is plain HTTPS that does not care how the APK is signed. You need:
+The patch replaces it with your own OAuth client, which also removes the developer from the
+picture entirely. The app used to fetch its client secret from the developer's Firestore after a
+Firebase sign-in; now nothing leaves your device except calls to Google's own APIs, signed with
+credentials only you hold. No backend, no Firebase session, no third party holding your tokens or
+seeing what you earn. Nothing is compiled into the APK either, so one build works for anybody.
+
+It is not offline: your reports live at `admob.googleapis.com` and that is where they come from.
+
+You need:
 
 1. A Google Cloud project with the **AdMob API** and the **AdSense Management API** enabled. The
    second one only fills the payments card; without it the rest still works.
@@ -49,10 +66,10 @@ authorization code is plain HTTPS that does not care how the APK is signed. You 
 3. An OAuth client of type **Desktop**.
 
 Open AdMobile, tap **Sign in**, paste the client id and secret, save. The consent screen runs in the
-browser; publisher id, currency and time zone are read back automatically. Nothing is compiled into
-the APK, so one build works for anybody.
+browser; publisher id, currency and time zone are read back automatically.
 
-Limits: one account, no switcher. Refresh tokens from a Testing consent screen expire after 7 days.
+Limits: one account, no switcher. Refresh tokens from a Testing consent screen expire after 7 days,
+which publishing the consent screen removes.
 
 ### Without the Morphe toolchain
 
@@ -71,9 +88,9 @@ Google project problem.
 stubs. It needs javac and nothing else.
 
 `tools/verify-admobile.py` checks a patched, decoded tree before it is built: that every hook is
-there, that a hook injected into a suspend function guards the parameters Kotlin nulls out when it
-resumes, that an unrecognised key still falls through to the app's own storage, and that the ads,
-pro flag and resources came out as intended.
+there, that no read of the pro flag survives, that a hook injected into a suspend function guards
+the parameters Kotlin nulls out when it resumes, and that an unrecognised key still falls through
+to the app's own storage.
 
 ### Running a build
 

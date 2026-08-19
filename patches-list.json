@@ -2,8 +2,48 @@
   "version": "2.3.0",
   "patches": [
     {
-      "name": "Custom AdMob Credentials",
-      "description": "Sign in with your own Google OAuth client and refresh token, entered in the app, instead of the Google Sign-In flow that a re-signed APK cannot use.",
+      "name": "Custom Maps API Key",
+      "description": "Replace Transit Google Maps key with your own Android Maps SDK key for re-signed APKs.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.thetransitapp.droid": null
+      },
+      "options": [
+        {
+          "key": "mapsApiKey",
+          "title": "Google Maps API key",
+          "description": "Android Maps SDK key",
+          "required": false,
+          "type": "kotlin.String",
+          "default": "",
+          "values": null
+        }
+      ]
+    },
+    {
+      "name": "Pro Features Unlock",
+      "description": "Unlock all pro features in Transit",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "com.thetransitapp.droid": null
+      },
+      "options": []
+    },
+    {
+      "name": "Pro Unlock",
+      "description": "Unlock every pro feature in AdMobile, in every process that checks for one.",
+      "use": true,
+      "dependencies": [],
+      "compatiblePackages": {
+        "io.stark.admob": null
+      },
+      "options": []
+    },
+    {
+      "name": "Serverless Sign-In",
+      "description": "Sign in with your own Google OAuth client, so the app talks to Google directly and to nobody else. No developer backend, no Firebase session, no third party holding your tokens or seeing your earnings, and no Google Sign-In that a re-signed APK cannot complete.",
       "use": true,
       "dependencies": [
         "AdMob Credentials Screen"
@@ -31,68 +71,6 @@
           "values": null
         }
       ]
-    },
-    {
-      "name": "Custom Maps API Key",
-      "description": "Replace Transit Google Maps key with your own Android Maps SDK key for re-signed APKs.",
-      "use": true,
-      "dependencies": [],
-      "compatiblePackages": {
-        "com.thetransitapp.droid": null
-      },
-      "options": [
-        {
-          "key": "mapsApiKey",
-          "title": "Google Maps API key",
-          "description": "Android Maps SDK key",
-          "required": false,
-          "type": "kotlin.String",
-          "default": "",
-          "values": null
-        }
-      ]
-    },
-    {
-      "name": "Disable Ad Requests",
-      "description": "Clear the AdMob ad unit ids so no ad is ever requested from the network.",
-      "use": true,
-      "dependencies": [],
-      "compatiblePackages": {
-        "io.stark.admob": null
-      },
-      "options": []
-    },
-    {
-      "name": "Hide Ads",
-      "description": "Hide the native ads shown on the home, apps, app info and mediation screens.",
-      "use": true,
-      "dependencies": [],
-      "compatiblePackages": {
-        "io.stark.admob": null
-      },
-      "options": []
-    },
-    {
-      "name": "Pro Features Unlock",
-      "description": "Unlock all pro features in Transit",
-      "use": true,
-      "dependencies": [],
-      "compatiblePackages": {
-        "com.thetransitapp.droid": null
-      },
-      "options": []
-    },
-    {
-      "name": "Pro Unlock",
-      "description": "Unlock all pro features in AdMobile.",
-      "use": true,
-      "dependencies": [
-        "Pro Badge"
-      ],
-      "compatiblePackages": {
-        "io.stark.admob": null
-      },
-      "options": []
     }
   ]
 }

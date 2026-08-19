@@ -227,22 +227,31 @@ public final class Credentials {
         return value == null ? "" : value;
     }
 
+    /**
+     * Written synchronously, on purpose.
+     *
+     * <p>{@code apply} only schedules the write, and the sign in ends by killing the process so the
+     * app comes back with a fresh one. Anything still queued at that moment is lost: the publisher
+     * id was being written and then dropped on every attempt, which left the account half connected
+     * no matter how many times it was retried. These are a handful of short values written a
+     * handful of times, so paying for the disk write here costs nothing worth measuring.
+     */
     public static void put(String key, String value) {
         if (preferences == null) {
             Log.e(TAG, "put before attach: " + key);
             return;
         }
 
-        preferences.edit().putString(key, value == null ? "" : value.trim()).apply();
+        preferences.edit().putString(key, value == null ? "" : value.trim()).commit();
     }
 
-    /** One commit for the lot, rather than one per key. */
+    /** One write for the lot, rather than one per key. */
     public static void clear(String... keys) {
         if (preferences == null) return;
 
         SharedPreferences.Editor editor = preferences.edit();
         for (String key : keys) editor.putString(key, "");
-        editor.apply();
+        editor.commit();
     }
 
     /** True once the values the token requests need are present. */

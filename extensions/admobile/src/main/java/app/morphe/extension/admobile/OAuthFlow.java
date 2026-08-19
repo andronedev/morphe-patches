@@ -257,9 +257,10 @@ public final class OAuthFlow {
 
             if (Credentials.publisherId().isEmpty()) {
                 report(activity, callback, false, accounts == null
-                        ? "Signed in, but the AdMob account could not be read. Reopen this screen "
-                                + "to retry; you will not have to sign in again."
-                        : "Signed in, but no AdMob account is linked to this Google account.");
+                        ? "Signed in, but the account request got no response. Tap again to retry; "
+                                + "you will not have to sign in again."
+                        : "Signed in, but no publisher id came back. Google answered: "
+                                + trim(accounts));
                 return;
             }
 
@@ -312,7 +313,24 @@ public final class OAuthFlow {
                 Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
                 report.append("refresh: ok\n");
 
+                String accounts = get(ACCOUNTS_ENDPOINT, accessToken);
+                report.append("accounts: ")
+                        .append(accounts == null ? "no response" : trim(accounts))
+                        .append('\n');
+
                 String publisher = Credentials.get(Credentials.KEY_PUBLISHER_ID);
+                if (publisher.isEmpty()) {
+                    publisher = jsonString(accounts, "publisherId");
+                    if (publisher == null) {
+                        finishDiagnosis(activity, callback, report);
+                        return;
+                    }
+
+                    store(Credentials.KEY_PUBLISHER_ID, publisher);
+                    store(Credentials.KEY_CURRENCY, jsonString(accounts, "currencyCode"));
+                    store(Credentials.KEY_TIME_ZONE, jsonString(accounts, "reportingTimeZone"));
+                    report.append("publisher: recovered ").append(publisher).append('\n');
+                }
                 String apps = get(ACCOUNTS_ENDPOINT + "/" + publisher + "/apps", accessToken);
                 report.append("apps: ").append(apps == null ? "no response" : trim(apps)).append('\n');
             } catch (Exception exception) {

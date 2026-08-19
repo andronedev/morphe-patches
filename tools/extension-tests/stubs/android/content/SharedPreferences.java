@@ -7,6 +7,11 @@ public interface SharedPreferences {
 
     interface Editor {
         Editor putString(String key, String value);
+
+        /** Schedules the write. Anything still queued when the process dies is lost. */
         void apply();
+
+        /** Writes before returning. */
+        boolean commit();
     }
 }

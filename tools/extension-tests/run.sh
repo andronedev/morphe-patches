@@ -4,7 +4,7 @@
 # The extension is plain Java over a handful of Android APIs, so the parts worth testing (what is
 # stored, what is answered to the app's reads, and when a sign in is finished) need no device and no
 # Android SDK. Only javac.
-set -e
+set -u
 
 here=$(dirname "$0")
 extension="$here/../../extensions/admobile/src/main/java/app/morphe/extension/admobile"
@@ -18,10 +18,15 @@ javac -nowarn -d "$out" \
     "$here/stubs/app/morphe/extension/admobile/CredentialsActivity.java" \
     "$here/FakeContext.java" \
     "$here/CredentialsTest.java" \
-    "$here/OAuthFlowTest.java"
+    "$here/OAuthFlowTest.java" \
+    "$here/LifecycleTest.java"
 
-echo "Credentials"
-java -cp "$out" CredentialsTest
-echo
-echo "OAuthFlow"
-java -cp "$out" OAuthFlowTest
+# Every suite runs even when one fails, so a single run names everything that is broken.
+status=0
+for suite in CredentialsTest OAuthFlowTest LifecycleTest; do
+    echo "$suite"
+    java -cp "$out" "$suite" || status=1
+    echo
+done
+
+exit $status

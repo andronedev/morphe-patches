@@ -70,6 +70,11 @@ Google project problem.
 `tools/extension-tests/run.sh` runs the extension's tests on the JVM against hand-written Android
 stubs. It needs javac and nothing else.
 
+`tools/verify-admobile.py` checks a patched, decoded tree before it is built: that every hook is
+there, that a hook injected into a suspend function guards the parameters Kotlin nulls out when it
+resumes, that an unrecognised key still falls through to the app's own storage, and that the ads,
+pro flag and resources came out as intended.
+
 ## Transit
 
 On recent Transit versions, any re-signed APK may break in-app maps. Use **Custom Maps API Key**

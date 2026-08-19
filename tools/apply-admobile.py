@@ -49,6 +49,10 @@ INTENT = "Landroid/content/Intent;"
 #
 # The anchor is the method header plus its .locals line, which is what pins each edit to one method
 # and guarantees the registers the body uses exist.
+#
+# A body inserted at the top of a suspend function runs on every resumption of it as well as on
+# entry, and Kotlin passes null for the value parameters when it resumes. Anything reading one of
+# them has to check it first.
 EDITS = {
     # The form writes to private preferences, so the extension needs a context before any read.
     "application": (
@@ -63,6 +67,8 @@ EDITS = {
         APP_STORE,
         ".method public final g(Ll1/d;Lyh/c;)Ljava/lang/Object;\n    .locals 7\n",
         f"""
+    if-eqz p1, :morphe_original
+
     iget-object v0, p1, Ll1/d;->a:Ljava/lang/String;
 
     invoke-static {{v0}}, {EXTENSION}->forDataStoreKey(Ljava/lang/String;)Ljava/lang/String;
@@ -82,6 +88,8 @@ EDITS = {
         SETTINGS_STORE,
         ".method public final f(Ll1/d;Lyh/c;)Ljava/lang/Object;\n    .locals 4\n",
         f"""
+    if-eqz p1, :morphe_original_setting
+
     iget-object v0, p1, Ll1/d;->a:Ljava/lang/String;
 
     invoke-static {{v0}}, {EXTENSION}->forDataStoreKey(Ljava/lang/String;)Ljava/lang/String;
@@ -117,9 +125,14 @@ EDITS = {
         APP_STORE,
         ".method public final n(Ll1/d;Ljava/lang/String;Lyh/c;)Ljava/lang/Object;\n    .locals 3\n",
         f"""
+    if-eqz p1, :morphe_original_write
+
     iget-object v0, p1, Ll1/d;->a:Ljava/lang/String;
 
     invoke-static {{v0, p2}}, {EXTENSION}->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
+
+    :morphe_original_write
+    nop
 """,
     ),
     "legacy_write": (

@@ -51,6 +51,7 @@ private fun bundledClientMethod(name: String) =
 private fun MutableMethod.hookStoreRead(keyNameField: String) = addInstructionsWithLabels(
     0,
     """
+        if-eqz p1, :original
         iget-object v0, p1, $keyNameField
         invoke-static { v0 }, $CREDENTIALS_CLASS_DESCRIPTOR->forDataStoreKey(Ljava/lang/String;)Ljava/lang/String;
         move-result-object v0
@@ -127,6 +128,10 @@ val customCredentialsPatch = bytecodePatch(
         //
         //    The key class and the field holding the key name are both obfuscated, so they are read
         //    off the method's own signature rather than written down.
+        //
+        //    Both hooks sit before the state machine, so they also run on every resumption of the
+        //    suspend function, and Kotlin passes null for the value parameters when it resumes. A
+        //    null key is therefore normal and means "not an entry, a return", so it falls through.
         val preferencesKeyType = AppStoreReadFingerprint.method.parameterTypes.first().toString()
         val keyNameField = mutableClassDefBy(preferencesKeyType)
             .fields
@@ -154,11 +159,15 @@ val customCredentialsPatch = bytecodePatch(
         // 2b. Both writes are mirrored. An access token lasts an hour, after which the app refreshes
         //     it and stores the new one; without this the reads above would keep answering with the
         //     expired value and every request would fail.
-        AppStoreWriteFingerprint.method.addInstructions(
+        AppStoreWriteFingerprint.method.addInstructionsWithLabels(
             0,
             """
+                if-eqz p1, :original
                 iget-object v0, p1, $keyNameField
                 invoke-static { v0, p2 }, $CREDENTIALS_CLASS_DESCRIPTOR->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
+
+                :original
+                nop
             """,
         )
 

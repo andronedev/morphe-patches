@@ -57,9 +57,12 @@ Limits: one account, no switcher. Refresh tokens from a Testing consent screen e
 ### Without the Morphe toolchain
 
 `tools/apply-admobile.py` makes the same edits on an apktool-decoded APK; its docstring gives the
-full sequence, including building and injecting the extension dex. Decode a **universal** APK:
-AdMobile ships as a split set and the base split alone installs as "app not compatible with this
-device".
+full sequence, including building and injecting the extension dex.
+
+Two packaging traps, both of which install as "app not compatible with this device". Decode a
+**universal** APK, not one split of the set. And if the merged APK carries only `lib/armeabi-v7a`,
+drop `lib/` before signing: it makes the build look 32-bit only, which a 64-bit-only phone refuses.
+AdMobile's one native library is an optional DataStore component the app runs fine without.
 
 `tools/check-admobile-api.py` replays the API calls from a desktop, to tell a build problem from a
 Google project problem.

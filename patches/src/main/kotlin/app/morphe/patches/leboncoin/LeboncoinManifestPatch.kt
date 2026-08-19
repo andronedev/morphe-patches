@@ -85,19 +85,38 @@ private val REQUIRED_PERMISSIONS = listOf(
 internal var applicationClassName: String? = null
 
 /**
- * TODO(recon) : remplir `classes`, `methods` et `endpoints` à partir de la sortie de
- * `tools/lbc-recon.py` puis de fingerprints dédiés. Tant que ces valeurs sont vides, le runtime
- * démarre mais l'auto-repost reste inactif (endpoints inconnus) et le shim HTTP n'est pas posé.
+ * Endpoints relevés sur `fr.leboncoin` 100.120.1 (cf. `docs/leboncoin/RECON.md`).
+ *
+ * `classes` et `methods` restent vides : ils ne servent qu'aux bibliothèques tierces obfusquées
+ * (OkHttp, Retrofit), qui demandent des fingerprints dédiés — le code `fr.leboncoin.*`, lui, n'est
+ * pas renommé et est donc adressable directement par le runtime.
+ *
+ * TODO(okhttp) : résoudre `okhttp.interceptor` / `okhttp.clientBuilder` par fingerprint (ancre
+ * exploitable : la chaîne `"network interceptor "` de RealInterceptorChain), puis générer le shim
+ * qui alimente `HttpBridge`.
  */
 private fun buildBindingsJson(): String = """
     {
-      "apkVersion": "",
-      "classes": {},
+      "apkVersion": "$KNOWN_APK_VERSION",
+      "classes": {
+        "app.application": "$KNOWN_APPLICATION_CLASS"
+      },
       "methods": {},
       "endpoints": {
-        "search": "",
-        "adCreate": "",
-        "adDelete": ""
+        "apiBase": "https://api.leboncoin.fr",
+        "adProlong": "https://api.leboncoin.fr/api/pintad/v1/public/manual/prolongation/{id}",
+        "adDelete": "https://api.leboncoin.fr/api/pintad/v1/public/manual/delete/ads",
+        "adPause": "https://api.leboncoin.fr/api/pintad/v1/public/manual/pause/ads",
+        "adUnpause": "https://api.leboncoin.fr/api/pintad/v1/public/manual/unpause/ads",
+        "adDetail": "https://api.leboncoin.fr/api/pintad/v1/public/manual/classified/{id}",
+        "ownerListing": "https://api.leboncoin.fr/api/adfinder/v1/owner_listing",
+        "adCreate": ""
       }
     }
 """.trimIndent()
+
+/** Version sur laquelle la recon a été faite : sert au diagnostic, pas au filtrage. */
+private const val KNOWN_APK_VERSION = "100.120.1"
+
+/** Relevé par la recon ; le patch lit quand même le manifeste plutôt que de s'y fier. */
+private const val KNOWN_APPLICATION_CLASS = "fr.leboncoin.app.PolarisApplicationRelease"

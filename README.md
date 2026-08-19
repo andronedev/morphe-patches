@@ -9,6 +9,7 @@ An Aliucord-style mod framework: the APK is patched once with a minimal loader, 
 repatching.
 
 - Design, roadmap and known risks: [`docs/leboncoin/ARCHITECTURE.md`](docs/leboncoin/ARCHITECTURE.md)
+- Findings from the APK (v100.120.1): [`docs/leboncoin/RECON.md`](docs/leboncoin/RECON.md)
 - Runtime (loaded at execution, separate Gradle build): `runtime/leboncoin/`
 - Injector patches: `patches/src/main/kotlin/app/morphe/patches/leboncoin/`
 - APK reconnaissance tool: `tools/lbc-recon.py` (`python3 tools/lbc-recon.py app.apk -o recon/`)

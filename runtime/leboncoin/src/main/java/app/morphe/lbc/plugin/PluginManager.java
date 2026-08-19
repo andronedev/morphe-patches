@@ -5,6 +5,7 @@ import android.content.Context;
 import app.morphe.lbc.Lbc;
 import app.morphe.lbc.Logger;
 import app.morphe.lbc.Prefs;
+import app.morphe.lbc.plugins.AutoProlongPlugin;
 import app.morphe.lbc.plugins.AutoRepostPlugin;
 import app.morphe.lbc.plugins.BetterFiltersPlugin;
 import app.morphe.lbc.plugins.NoAdsPlugin;
@@ -76,9 +77,13 @@ public final class PluginManager {
         registerBuiltin(new BetterFiltersPlugin(), PluginInfo.builtin(
                 "builtin.filters", "Meilleurs filtres",
                 "Filtres côté client : mots-clés exclus, prix réel, exclusion des pros, dédoublonnage."));
+        registerBuiltin(new AutoProlongPlugin(), PluginInfo.builtin(
+                "builtin.prolong", "Auto-prolongation",
+                "Prolonge automatiquement les annonces via l'action native de l'app (recommandé)."));
         registerBuiltin(new AutoRepostPlugin(), PluginInfo.builtin(
                 "builtin.repost", "Auto-repost",
-                "Republie automatiquement les annonces sélectionnées (suppression puis redépôt)."));
+                "Republie les annonces suivies (suppression puis redépôt). Contraire aux CGU : "
+                        + "préférer l'auto-prolongation."));
 
         loadExternal();
 
@@ -152,9 +157,9 @@ public final class PluginManager {
     // ------------------------------------------------------------------ cycle de vie
 
     public boolean isEnabled(PluginInfo info) {
-        // Auto-repost écrit côté serveur : il ne démarre que si l'utilisateur l'active explicitement.
-        boolean defaultEnabled = !"builtin.repost".equals(info.id);
-        return prefs.getBoolean("enabled." + info.id, defaultEnabled);
+        // Les plugins qui écrivent côté serveur ne démarrent que sur activation explicite.
+        boolean writesToServer = "builtin.repost".equals(info.id) || "builtin.prolong".equals(info.id);
+        return prefs.getBoolean("enabled." + info.id, !writesToServer);
     }
 
     public void setEnabled(String id, boolean enabled) {

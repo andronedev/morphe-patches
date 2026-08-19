@@ -223,11 +223,21 @@ AD_SDK_MARKERS = {
     "prebid": ["org.prebid", "prebid.org"],
 }
 
+# Attention : sur une app minifiée, les classes d'OkHttp/Retrofit sont renommées. On cherche donc
+# aussi les traces qui survivent à R8 (chaîne de version, exceptions conservées, sous-paquets).
 HTTP_MARKERS = {
-    "okhttp": ["okhttp3.OkHttpClient", "Lokhttp3/OkHttpClient;"],
-    "retrofit": ["retrofit2.Retrofit", "Lretrofit2/Retrofit;"],
-    "ktor": ["io.ktor.client"],
-    "apollo-graphql": ["com.apollographql.apollo"],
+    "okhttp": ["okhttp3.OkHttpClient", "Lokhttp3/", "okhttp/", "okhttp.OkHttpClient"],
+    "retrofit": ["retrofit2.Retrofit", "Lretrofit2/", "retrofit2."],
+    "ktor": ["io.ktor.client", "Lio/ktor/client/"],
+    "apollo-graphql": ["com.apollographql.apollo", "Lcom/apollographql/apollo"],
+}
+
+# Protections anti-bot : déterminant pour savoir si un appel peut être rejoué hors de l'app.
+ANTIBOT_MARKERS = {
+    "datadome": ["DataDome", "datadome"],
+    "recaptcha": ["com.google.android.recaptcha", "RecaptchaAction"],
+    "play-integrity": ["com.google.android.play.core.integrity", "IntegrityManager"],
+    "safetynet": ["com.google.android.gms.safetynet"],
 }
 
 # Endpoints intéressants pour les fonctions visées.
@@ -317,6 +327,11 @@ def analyse_apk(apk_path: str, out_dir: str) -> dict:
         hits = [m for m in markers if m in joined]
         if hits:
             report["http"][label] = hits
+    report["antibot"] = {}
+    for label, markers in ANTIBOT_MARKERS.items():
+        hits = [m for m in markers if m in joined]
+        if hits:
+            report["antibot"][label] = hits
 
     # --- URLs et chemins d'API
     urls = sorted({m.group(0) for s in unique_strings for m in URL_RE.finditer(s)})
@@ -488,6 +503,7 @@ def main(argv: list[str]) -> int:
     print("dex            : %d" % len(report.get("dex", {})))
     print("SDK pub        : %s" % (", ".join(sorted(report.get("sdk", {}))) or "aucun détecté"))
     print("stack HTTP     : %s" % (", ".join(sorted(report.get("http", {}))) or "inconnue"))
+    print("anti-bot       : %s" % (", ".join(sorted(report.get("antibot", {}))) or "aucun détecté"))
     for key, value in sorted(report.get("counts", {}).items()):
         print("%-15s: %d" % (key, value))
     print("\nSortie dans %s/ (report.json, strings.txt, endpoints-candidats.txt, ...)" % args.out)

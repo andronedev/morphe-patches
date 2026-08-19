@@ -40,20 +40,27 @@ public final class HttpBridge {
 
     private static final Logger LOG = new Logger("Http");
 
-    /** Domaines des régies pub / trackers, court-circuités avant même l'envoi. */
+    /**
+     * Domaines des régies / traceurs, court-circuités avant même l'envoi.
+     *
+     * <p>Liste alignée sur les SDK effectivement présents dans l'APK (cf. `docs/leboncoin/RECON.md`) :
+     * Google Ads/AdMob, AppLovin, Smart AdServer, Prebid, Adjust, Batch, Firebase Analytics.
+     * Volontairement absent : tout ce qui touche à DataDome (anti-bot) et à Didomi (consentement) —
+     * les bloquer casserait l'app ou fausserait le consentement, pas la publicité.
+     */
     private static final List<String> BLOCKED_HOSTS = new CopyOnWriteArrayList<>(Arrays.asList(
             "googleads.g.doubleclick.net",
             "pagead2.googlesyndication.com",
             "securepubads.g.doubleclick.net",
-            "static.criteo.net",
-            "bidder.criteo.com",
+            "googleadservices.com",
             "ms.applvn.com",
             "rt.applvn.com",
             "prg.smartadserver.com",
             "diff.smartadserver.com",
-            "a.teads.tv",
-            "sdk.teads.tv",
-            "widgets.outbrain.com"
+            "prebid.leboncoin.fr",
+            "app.adjust.com",
+            "ws.batch.com",
+            "app-measurement.com"
     ));
 
     private static final List<Subscription> RESPONSE_LISTENERS = new CopyOnWriteArrayList<>();

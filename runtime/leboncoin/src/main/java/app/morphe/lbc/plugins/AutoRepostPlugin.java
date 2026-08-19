@@ -9,38 +9,34 @@ import app.morphe.lbc.plugin.Plugin;
 
 import org.json.JSONObject;
 
-import java.io.ByteArrayOutputStream;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
- * Republication automatique d'annonces (suppression puis redépôt).
+ * Republication automatique d'annonces : suppression puis redépôt.
+ *
+ * <p><b>Préférer {@link AutoProlongPlugin}.</b> La prolongation native atteint le même but sans
+ * supprimer l'annonce, sans doublon et sans perdre son ancienneté, ses statistiques ni ses
+ * messages. Ce plugin existe parce que le supprimer/redéposer a été explicitement demandé ; il est
+ * désactivé par défaut.
  *
  * <h3>Comment ça marche</h3>
  * <ol>
- *   <li>Quand tu déposes une annonce normalement, {@link HttpBridge} capture la requête de dépôt
- *       et l'identifiant renvoyé : c'est le modèle qui sera rejoué (aucun schéma d'API reconstruit
- *       à la main).</li>
- *   <li>Les en-têtes d'authentification sont mémorisés au passage, pour rejouer les appels avec la
- *       même session que l'app.</li>
- *   <li>Quand une annonce est due, le plugin envoie un DELETE puis un POST du modèle capturé, et
- *       met à jour l'identifiant suivi.</li>
+ *   <li>Quand tu déposes une annonce normalement, {@link HttpBridge} capture la requête de dépôt et
+ *       l'identifiant renvoyé : c'est le modèle qui sera rejoué. On ne reconstruit pas le schéma de
+ *       l'API de dépôt, qui est volumineux et versionné.</li>
+ *   <li>Quand une annonce est due : suppression, puis rejeu du modèle capturé, puis suivi du
+ *       nouvel identifiant.</li>
  * </ol>
  *
  * <h3>Garde-fous (volontaires)</h3>
  * Republier pour remonter une annonce est contraire aux CGU leboncoin (c'est leur option payante
- * « remontée ») et les doublons sont détectés côté serveur : un rythme agressif se paie par une
- * suspension de compte. Par défaut, donc :
+ * « remontée »), les doublons sont détectés côté serveur et DataDome voit passer le trafic : un
+ * rythme agressif se paie par une suspension de compte. Par défaut :
  * <ul>
  *   <li>{@code dryRun} activé — le plugin journalise ce qu'il ferait, sans rien envoyer ;</li>
  *   <li>intervalle minimum de {@value #MIN_INTERVAL_HOURS} h par annonce, plancher non contournable ;</li>
  *   <li>{@value #MAX_REPOSTS_PER_DAY} republications par jour maximum, toutes annonces confondues ;</li>
- *   <li>un décalage aléatoire, pour ne pas republier à heure fixe ;</li>
+ *   <li>une seule annonce traitée par cycle ;</li>
  *   <li>exécution uniquement quand l'app tourne (pas de service en arrière-plan en v1).</li>
  * </ul>
  */
@@ -52,7 +48,7 @@ public final class AutoRepostPlugin extends Plugin {
     private static final long CHECK_INTERVAL_MS = 15 * 60_000L;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private final Map<String, String> authHeaders = new HashMap<>();
+    private final ApiClient api = new ApiClient();
 
     private RepostStore store;
     private volatile boolean enabled;
@@ -72,21 +68,12 @@ public final class AutoRepostPlugin extends Plugin {
     public void onStart() {
         enabled = true;
         store = new RepostStore(prefs);
-
-        // Mémorise la session courante pour pouvoir rejouer des appels authentifiés.
-        HttpBridge.onRequest("leboncoin", exchange -> {
-            for (Map.Entry<String, String> header : exchange.requestHeaders().entrySet()) {
-                String name = header.getKey().toLowerCase(java.util.Locale.ROOT);
-                if (name.equals("authorization") || name.startsWith("api-key")
-                        || name.equals("user-agent") || name.startsWith("x-")) {
-                    authHeaders.put(header.getKey(), header.getValue());
-                }
-            }
-        });
+        api.captureFrom("leboncoin");
 
         String depositEndpoint = Lbc.bindings().endpoint("adCreate", "");
         if (depositEndpoint.isEmpty()) {
-            log.w("endpoint de dépôt inconnu (bindings.json incomplet) : capture désactivée");
+            log.w("endpoint de dépôt inconnu (bindings.json incomplet) : capture désactivée. "
+                    + "Il faut une capture réseau d'un dépôt réel pour le renseigner.");
         } else {
             HttpBridge.onResponse(pathOf(depositEndpoint), exchange -> {
                 captureDeposit(exchange.requestBody, exchange.responseBody);
@@ -142,8 +129,8 @@ public final class AutoRepostPlugin extends Plugin {
                 log.d("quota quotidien atteint (" + MAX_REPOSTS_PER_DAY + ")");
                 return;
             }
-            if (authHeaders.isEmpty() && !dryRun) {
-                log.w("aucune session capturée pour l'instant : ouvre l'app une fois, puis réessaie");
+            if (!api.hasSession() && !dryRun) {
+                log.w("aucune session capturée : ouvre l'app une fois, puis réessaie");
                 return;
             }
 
@@ -154,10 +141,12 @@ public final class AutoRepostPlugin extends Plugin {
                 }
                 if (dryRun) {
                     log.i("[dryRun] republierait l'annonce " + entry.adId);
+                    entry.lastRepostAt = now;
+                    store.update(entry);
                     continue;
                 }
                 repost(entry, now);
-                break; // une seule republication par cycle, volontairement
+                return; // une seule republication par cycle, volontairement
             }
         } catch (Throwable error) {
             log.e("cycle d'auto-repost en échec", error);
@@ -172,14 +161,31 @@ public final class AutoRepostPlugin extends Plugin {
             return;
         }
         try {
-            int deleteStatus = send("DELETE", deleteEndpoint.replace("{id}", entry.adId), null);
-            if (deleteStatus < 200 || deleteStatus >= 300) {
-                log.w("suppression refusée (HTTP " + deleteStatus + ") pour " + entry.adId);
+            // TODO(capture) : la charge utile exacte de /manual/delete/ads reste à confirmer par
+            // capture réseau — l'endpoint prend une liste d'annonces, pas un identifiant en URL.
+            String deletePayload = new JSONObject()
+                    .put("ads", new org.json.JSONArray().put(new JSONObject().put("ad_id", entry.adId)))
+                    .toString();
+
+            ApiClient.Response deleted = api.send("POST", deleteEndpoint.replace("{id}", entry.adId), deletePayload);
+            if (deleted.looksBlocked()) {
+                log.w("suppression bloquée par la protection anti-bot (HTTP " + deleted.status
+                        + ") : il faut passer par le client de l'app, cf. ARCHITECTURE.md §3");
                 return;
             }
-            String created = sendForBody("POST", createEndpoint, entry.payload);
-            String newId = created == null ? "" : AdsDocument.text(new JSONObject(created),
-                    "ad_id", "list_id", "id");
+            if (!deleted.isSuccess()) {
+                log.w("suppression refusée (HTTP " + deleted.status + ") pour " + entry.adId);
+                return;
+            }
+
+            ApiClient.Response created = api.send("POST", createEndpoint, entry.payload);
+            if (!created.isSuccess()) {
+                // L'annonce a été supprimée mais pas recréée : il faut le dire fort.
+                log.w("ATTENTION : annonce " + entry.adId + " supprimée mais redépôt refusé (HTTP "
+                        + created.status + "). Redépose-la manuellement.");
+                return;
+            }
+            String newId = AdsDocument.text(new JSONObject(created.body), "ad_id", "list_id", "id");
 
             entry.lastRepostAt = now;
             entry.repostCount++;
@@ -201,61 +207,6 @@ public final class AutoRepostPlugin extends Plugin {
 
     private static long dayOf(long millis) {
         return millis / 86_400_000L;
-    }
-
-    // ---------------------------------------------------------------------------- HTTP
-
-    private int send(String method, String url, String body) throws Exception {
-        HttpURLConnection connection = open(method, url);
-        try {
-            writeBody(connection, body);
-            return connection.getResponseCode();
-        } finally {
-            connection.disconnect();
-        }
-    }
-
-    private String sendForBody(String method, String url, String body) throws Exception {
-        HttpURLConnection connection = open(method, url);
-        try {
-            writeBody(connection, body);
-            int status = connection.getResponseCode();
-            InputStream stream = status >= 400 ? connection.getErrorStream() : connection.getInputStream();
-            if (stream == null) {
-                return null;
-            }
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            byte[] buffer = new byte[8192];
-            int read;
-            while ((read = stream.read(buffer)) != -1) {
-                out.write(buffer, 0, read);
-            }
-            return out.toString("UTF-8");
-        } finally {
-            connection.disconnect();
-        }
-    }
-
-    private HttpURLConnection open(String method, String url) throws Exception {
-        HttpURLConnection connection = (HttpURLConnection) new URL(url).openConnection();
-        connection.setRequestMethod(method);
-        connection.setConnectTimeout(15_000);
-        connection.setReadTimeout(20_000);
-        for (Map.Entry<String, String> header : authHeaders.entrySet()) {
-            connection.setRequestProperty(header.getKey(), header.getValue());
-        }
-        connection.setRequestProperty("Content-Type", "application/json");
-        return connection;
-    }
-
-    private static void writeBody(HttpURLConnection connection, String body) throws Exception {
-        if (body == null || body.isEmpty()) {
-            return;
-        }
-        connection.setDoOutput(true);
-        try (OutputStream out = connection.getOutputStream()) {
-            out.write(body.getBytes("UTF-8"));
-        }
     }
 
     private static String pathOf(String endpoint) {

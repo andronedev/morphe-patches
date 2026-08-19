@@ -14,8 +14,9 @@ import java.util.List;
  *
  * <p>Deux niveaux :
  * <ol>
- *   <li><b>réseau</b> — les appels aux régies (Criteo, AppLovin, Smart AdServer, Teads, ...) sont
- *       court-circuités par {@link HttpBridge}, ce qui économise aussi de la batterie et des données ;</li>
+ *   <li><b>réseau</b> — les appels aux régies présentes dans l'APK (Google Ads/AdMob, AppLovin,
+ *       Smart AdServer, Prebid, Adjust, Batch) sont court-circuités par {@link HttpBridge}, ce qui
+ *       économise aussi de la batterie et des données ;</li>
  *   <li><b>contenu</b> — les entrées sponsorisées sont retirées du JSON de résultats avant que
  *       l'app ne les affiche.</li>
  * </ol>

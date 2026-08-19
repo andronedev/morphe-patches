@@ -154,7 +154,7 @@ public final class CredentialsActivity extends Activity {
 
         // The code came back and the app is in the foreground again, which is exactly when the
         // exchange can reach the network.
-        if (OAuthFlow.hasPendingCode()) {
+        if (OAuthFlow.hasPendingWork()) {
             action.setEnabled(false);
             action.setText("Finishing…");
             OAuthFlow.completePending(this, signInCallback());

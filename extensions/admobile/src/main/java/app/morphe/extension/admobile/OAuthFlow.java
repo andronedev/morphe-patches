@@ -71,8 +71,21 @@ public final class OAuthFlow {
     }
 
     /** True once the redirect has been captured and only the exchange is left to do. */
-    public static boolean hasPendingCode() {
-        return !Credentials.get(Credentials.KEY_PENDING_CODE).isEmpty();
+    public static boolean hasPendingWork() {
+        return !Credentials.get(Credentials.KEY_PENDING_CODE).isEmpty() || needsAccount();
+    }
+
+    /**
+     * True when the tokens are in place but the account behind them was never read back.
+     *
+     * <p>The account lookup is a separate request, and it can fail on its own. When it does, the
+     * consent is already spent and the tokens are already stored, so the way forward is to retry
+     * that one request rather than to send the user through Google again.
+     */
+    private static boolean needsAccount() {
+        return Credentials.hasClient()
+                && !Credentials.get(Credentials.KEY_REFRESH_TOKEN).isEmpty()
+                && Credentials.publisherId().isEmpty();
     }
 
     /**
@@ -124,7 +137,13 @@ public final class OAuthFlow {
      * foreground, where its network is available.
      */
     public static void completePending(Activity activity, Callback callback) {
-        new Thread(() -> exchange(activity, callback)).start();
+        new Thread(() -> {
+            if (!Credentials.get(Credentials.KEY_PENDING_CODE).isEmpty()) {
+                exchange(activity, callback);
+            } else if (needsAccount()) {
+                linkAccount(activity, callback, null);
+            }
+        }).start();
     }
 
     private static void exchange(Activity activity, Callback callback) {
@@ -157,8 +176,43 @@ public final class OAuthFlow {
             Credentials.put(Credentials.KEY_REFRESH_TOKEN, refreshToken);
             Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
 
-            // The AdMob API names the account holding the token, so the publisher id, currency and
-            // time zone never have to be looked up in the console.
+            // Spent the moment Google answers, and a second attempt with it can only be refused.
+            // Anything left to do is done with the tokens, so the code is dropped here rather than
+            // at the end, where a later failure would have kept a dead code for the next retry.
+            clearPending();
+        } catch (Exception exception) {
+            Log.e(TAG, "token exchange failed", exception);
+            // The code is left in place: it stays usable for a few minutes, so simply returning to
+            // this screen with a working connection is enough to finish.
+            report(activity, callback, false, "Sign in failed: " + exception.getMessage());
+            return;
+        }
+
+        linkAccount(activity, callback, Credentials.get(Credentials.KEY_ACCESS_TOKEN));
+    }
+
+    /**
+     * Reads the account the tokens belong to, so the publisher id, currency and time zone never
+     * have to be looked up in the console.
+     *
+     * @param accessToken a token known to be current, or null to refresh one first.
+     */
+    private static void linkAccount(Activity activity, Callback callback, String accessToken) {
+        try {
+            if (accessToken == null) {
+                String refreshed = postForm(TOKEN_ENDPOINT, tokenRequest(
+                        "&refresh_token=" + encode(Credentials.get(Credentials.KEY_REFRESH_TOKEN))
+                                + "&grant_type=refresh_token"));
+
+                accessToken = jsonString(refreshed, "access_token");
+                if (accessToken == null) {
+                    report(activity, callback, false, "Token refused: " + trim(refreshed));
+                    return;
+                }
+
+                Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
+            }
+
             String accounts = get(ACCOUNTS_ENDPOINT, accessToken);
             if (accounts != null) {
                 store(Credentials.KEY_PUBLISHER_ID, jsonString(accounts, "publisherId"));
@@ -166,11 +220,11 @@ public final class OAuthFlow {
                 store(Credentials.KEY_TIME_ZONE, jsonString(accounts, "reportingTimeZone"));
             }
 
-            clearPending();
-
-            if (Credentials.get(Credentials.KEY_PUBLISHER_ID).isEmpty()) {
-                report(activity, callback, false,
-                        "Signed in, but no AdMob account is linked to this Google account.");
+            if (Credentials.publisherId().isEmpty()) {
+                report(activity, callback, false, accounts == null
+                        ? "Signed in, but the AdMob account could not be read. Reopen this screen "
+                                + "to retry; you will not have to sign in again."
+                        : "Signed in, but no AdMob account is linked to this Google account.");
                 return;
             }
 
@@ -180,9 +234,7 @@ public final class OAuthFlow {
 
             report(activity, callback, true, "Connected.");
         } catch (Exception exception) {
-            Log.e(TAG, "token exchange failed", exception);
-            // The code is left in place: it stays usable for a few minutes, so simply returning to
-            // this screen with a working connection is enough to finish.
+            Log.e(TAG, "account lookup failed", exception);
             report(activity, callback, false, "Sign in failed: " + exception.getMessage());
         }
     }

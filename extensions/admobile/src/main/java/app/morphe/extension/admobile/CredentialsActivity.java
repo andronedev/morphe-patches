@@ -6,6 +6,7 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
+import android.net.Uri;
 import android.os.Bundle;
 import android.text.InputType;
 import android.util.TypedValue;
@@ -69,8 +70,23 @@ public final class CredentialsActivity extends Activity {
 
         // Step 1 — the client, entered once and kept.
         form.addView(step("Step 1", "Your Google API client"));
-        form.addView(body("Create a project on Google Cloud, enable the AdMob API, then add an "
-                + "OAuth client of type Desktop. Paste its two values here."));
+        form.addView(body("These two values come from a Google Cloud project of your own. It takes "
+                + "a few minutes, once."));
+
+        final LinearLayout guide = buildGuide();
+        guide.setVisibility(View.GONE);
+
+        final TextView guideToggle = link("How do I get these?");
+        guideToggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                boolean showing = guide.getVisibility() == View.VISIBLE;
+                guide.setVisibility(showing ? View.GONE : View.VISIBLE);
+                guideToggle.setText(showing ? "How do I get these?" : "Hide the steps");
+            }
+        });
+        form.addView(guideToggle);
+        form.addView(guide);
 
         form.addView(label("OAuth client id"));
         clientId = field("000000000000-xxxx.apps.googleusercontent.com",
@@ -158,6 +174,80 @@ public final class CredentialsActivity extends Activity {
 
         status.setText(last);
         status.setVisibility(last.isEmpty() ? View.GONE : View.VISIBLE);
+    }
+
+    /** The console is only usable on a desktop browser, so the steps are worded to be followed there. */
+    private static final String[] GUIDE = {
+            "Open console.cloud.google.com and create a project.",
+            "APIs & Services → Library → search AdMob API → Enable.",
+            "APIs & Services → OAuth consent screen → External → add your own Google address "
+                    + "under Test users.",
+            "Credentials → Create credentials → OAuth client ID → Application type: Desktop app.",
+            "Copy the client id and the client secret it shows into the two fields below.",
+    };
+
+    private LinearLayout buildGuide() {
+        LinearLayout section = new LinearLayout(this);
+        section.setOrientation(LinearLayout.VERTICAL);
+        section.setPadding(dp(4), dp(8), 0, 0);
+
+        for (int i = 0; i < GUIDE.length; i++) {
+            section.addView(guideStep(i + 1, GUIDE[i]));
+        }
+
+        TextView open = link("Open the Google Cloud Console");
+        open.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                try {
+                    startActivity(new Intent(Intent.ACTION_VIEW,
+                            Uri.parse("https://console.cloud.google.com/apis/credentials")));
+                } catch (Exception exception) {
+                    Toast.makeText(CredentialsActivity.this, "No browser found.",
+                            Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        section.addView(open);
+
+        TextView note = body("Keep the consent screen in Testing: it is enough for your own "
+                + "account, but Google then expires the connection every seven days.");
+        note.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        section.addView(note);
+
+        return section;
+    }
+
+    /** One numbered row: the badge keeps the sequence readable at a glance on a narrow screen. */
+    private LinearLayout guideStep(int number, String text) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setPadding(0, dp(10), 0, 0);
+
+        TextView badge = new TextView(this);
+        badge.setText(String.valueOf(number));
+        badge.setTextColor(onPrimary);
+        badge.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
+        badge.setGravity(Gravity.CENTER);
+
+        GradientDrawable circle = new GradientDrawable();
+        circle.setShape(GradientDrawable.OVAL);
+        circle.setColor(primary);
+        badge.setBackground(circle);
+
+        int size = dp(22);
+        LinearLayout.LayoutParams badgeParams = new LinearLayout.LayoutParams(size, size);
+        badgeParams.rightMargin = dp(12);
+        row.addView(badge, badgeParams);
+
+        TextView content = new TextView(this);
+        content.setText(text);
+        content.setTextColor(onSurfaceVariant);
+        content.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13);
+        content.setLineSpacing(dp(3), 1f);
+        row.addView(content);
+
+        return row;
     }
 
     private OAuthFlow.Callback signInCallback() {

@@ -153,8 +153,9 @@ public final class CredentialsActivity extends Activity {
         super.onResume();
 
         // The code came back and the app is in the foreground again, which is exactly when the
-        // exchange can reach the network.
-        if (OAuthFlow.hasPendingWork()) {
+        // exchange can reach the network. Only a captured code runs on its own: it is consumed by
+        // the attempt, so this cannot repeat. Anything else is driven by the button.
+        if (OAuthFlow.hasPendingCode()) {
             action.setEnabled(false);
             action.setText("Finishing…");
             OAuthFlow.completePending(this, signInCallback());
@@ -252,6 +253,7 @@ public final class CredentialsActivity extends Activity {
     }
 
     private static String actionLabel() {
+        if (OAuthFlow.needsAccount()) return "Finish connecting";
         return Credentials.isConfigured() ? "Reconnect" : "Sign in with Google";
     }
 
@@ -275,6 +277,15 @@ public final class CredentialsActivity extends Activity {
 
         if (!Credentials.hasClient()) {
             Toast.makeText(this, "Fill in step 1 first.", Toast.LENGTH_LONG).show();
+            return;
+        }
+
+        // The tokens are already held and only the account is missing, so there is nothing for
+        // Google to consent to a second time.
+        if (OAuthFlow.needsAccount()) {
+            action.setEnabled(false);
+            action.setText("Finishing…");
+            OAuthFlow.retryAccount(this, signInCallback());
             return;
         }
 

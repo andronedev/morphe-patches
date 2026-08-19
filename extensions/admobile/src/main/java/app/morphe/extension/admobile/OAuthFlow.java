@@ -19,6 +19,7 @@ import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.security.MessageDigest;
 import java.security.SecureRandom;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Runs the Google consent flow inside the app, so nothing has to be pasted in by hand.
@@ -52,6 +53,9 @@ public final class OAuthFlow {
             "https://www.googleapis.com/auth/admob.readonly"
                     + " https://www.googleapis.com/auth/adsense.readonly";
 
+    /** One flow at a time. The form resumes more than once per sign in, and each resume asked. */
+    private static final AtomicBoolean running = new AtomicBoolean();
+
     /** Connectivity can lag a moment behind the app returning to the foreground. */
     private static final int NETWORK_ATTEMPTS = 4;
     private static final long RETRY_DELAY_MS = 1500L;
@@ -71,8 +75,8 @@ public final class OAuthFlow {
     }
 
     /** True once the redirect has been captured and only the exchange is left to do. */
-    public static boolean hasPendingWork() {
-        return !Credentials.get(Credentials.KEY_PENDING_CODE).isEmpty() || needsAccount();
+    public static boolean hasPendingCode() {
+        return !Credentials.get(Credentials.KEY_PENDING_CODE).isEmpty();
     }
 
     /**
@@ -82,7 +86,7 @@ public final class OAuthFlow {
      * consent is already spent and the tokens are already stored, so the way forward is to retry
      * that one request rather than to send the user through Google again.
      */
-    private static boolean needsAccount() {
+    public static boolean needsAccount() {
         return Credentials.hasClient()
                 && !Credentials.get(Credentials.KEY_REFRESH_TOKEN).isEmpty()
                 && Credentials.publisherId().isEmpty();
@@ -93,7 +97,32 @@ public final class OAuthFlow {
      * {@link #completePending}, which the form calls when it comes back to the foreground.
      */
     public static void start(Activity activity, String clientId, String clientSecret, Callback callback) {
-        new Thread(() -> authorize(activity, clientId, clientSecret, callback)).start();
+        if (!running.compareAndSet(false, true)) return;
+
+        new Thread(() -> {
+            try {
+                authorize(activity, clientId, clientSecret, callback);
+            } finally {
+                running.set(false);
+            }
+        }).start();
+    }
+
+    /**
+     * Finishes a sign in whose account lookup failed, without a second trip through the consent
+     * screen. Driven by the button rather than by the form resuming: the condition it recovers from
+     * stays true until it succeeds, and re-entering it on every resume is a loop.
+     */
+    public static void retryAccount(Activity activity, Callback callback) {
+        if (!running.compareAndSet(false, true)) return;
+
+        new Thread(() -> {
+            try {
+                linkAccount(activity, callback, null);
+            } finally {
+                running.set(false);
+            }
+        }).start();
     }
 
     private static void authorize(Activity activity, String clientId, String clientSecret, Callback callback) {
@@ -137,11 +166,17 @@ public final class OAuthFlow {
      * foreground, where its network is available.
      */
     public static void completePending(Activity activity, Callback callback) {
+        if (!running.compareAndSet(false, true)) return;
+
         new Thread(() -> {
-            if (!Credentials.get(Credentials.KEY_PENDING_CODE).isEmpty()) {
-                exchange(activity, callback);
-            } else if (needsAccount()) {
-                linkAccount(activity, callback, null);
+            try {
+                if (hasPendingCode()) {
+                    exchange(activity, callback);
+                } else if (needsAccount()) {
+                    linkAccount(activity, callback, null);
+                }
+            } finally {
+                running.set(false);
             }
         }).start();
     }

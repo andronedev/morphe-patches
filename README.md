@@ -67,6 +67,9 @@ AdMobile's one native library is an optional DataStore component the app runs fi
 `tools/check-admobile-api.py` replays the API calls from a desktop, to tell a build problem from a
 Google project problem.
 
+`tools/extension-tests/run.sh` runs the extension's tests on the JVM against hand-written Android
+stubs. It needs javac and nothing else.
+
 ## Transit
 
 On recent Transit versions, any re-signed APK may break in-app maps. Use **Custom Maps API Key**

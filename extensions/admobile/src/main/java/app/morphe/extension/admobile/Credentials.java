@@ -3,7 +3,10 @@ package app.morphe.extension.admobile;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.sqlite.SQLiteDatabase;
 import android.util.Log;
+
+import java.io.File;
 
 /**
  * Credentials the patched AdMobile signs its AdMob API calls with.
@@ -26,6 +29,9 @@ public final class Credentials {
     private static final String TAG = "MorpheCredentials";
 
     private static final String PREFERENCES_NAME = "morphe_admobile_credentials";
+
+    /** The app's Room database, whose users table the rest of the app reads. */
+    private static final String DATABASE_NAME = "main.db";
 
     public static final String KEY_CLIENT_ID = "client_id";
     public static final String KEY_CLIENT_SECRET = "client_secret";
@@ -113,6 +119,70 @@ public final class Credentials {
     /** Called from the patched {@code Application.onCreate}. */
     public static void init(Context applicationContext) {
         context = applicationContext.getApplicationContext();
+
+        if (isConfigured()) seedAccount();
+    }
+
+    /**
+     * Writes the account into the app's own database.
+     *
+     * <p>Answering the query for the selected account is enough to get past the startup check, but
+     * the rest of the app reads the same table through other queries — the account list the home
+     * screen observes among them — and those saw an empty table, so nothing was ever requested.
+     *
+     * <p>Done from {@code Application.onCreate}, before Room opens the file, and only when it
+     * already exists: the first sign in restarts the app, so the row lands on the way back up.
+     */
+    public static void seedAccount() {
+        if (context == null) return;
+
+        File database = context.getDatabasePath(DATABASE_NAME);
+        if (!database.exists()) return;
+
+        SQLiteDatabase handle = null;
+        try {
+            handle = SQLiteDatabase.openDatabase(
+                    database.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+
+            String publisher = get(KEY_PUBLISHER_ID);
+            handle.execSQL(
+                    "INSERT OR REPLACE INTO users"
+                            + " (id, sign_id, fire_id, email, name, avatar, time_zone, currency,"
+                            + " is_selected) VALUES (?,?,?,?,?,?,?,?,1)",
+                    new Object[]{
+                            publisher, publisher, publisher,
+                            email(), email(), "", timeZone(), currency(),
+                    });
+        } catch (Exception exception) {
+            Log.e(TAG, "could not seed the account", exception);
+        } finally {
+            close(handle);
+        }
+    }
+
+    private static void clearAccount() {
+        if (context == null) return;
+
+        File database = context.getDatabasePath(DATABASE_NAME);
+        if (!database.exists()) return;
+
+        SQLiteDatabase handle = null;
+        try {
+            handle = SQLiteDatabase.openDatabase(
+                    database.getPath(), null, SQLiteDatabase.OPEN_READWRITE);
+            handle.execSQL("DELETE FROM users");
+        } catch (Exception exception) {
+            Log.e(TAG, "could not clear the account", exception);
+        } finally {
+            close(handle);
+        }
+    }
+
+    private static void close(SQLiteDatabase handle) {
+        try {
+            if (handle != null) handle.close();
+        } catch (Exception ignored) {
+        }
     }
 
     private static SharedPreferences preferences() {
@@ -237,6 +307,8 @@ public final class Credentials {
         put(KEY_PENDING_CODE, "");
         put(KEY_PENDING_VERIFIER, "");
         put(KEY_PENDING_REDIRECT, "");
+
+        clearAccount();
     }
 
     public static String publisherId() {

@@ -178,6 +178,10 @@ public final class OAuthFlow {
                 return;
             }
 
+            // The restart seeds it too, but doing it here means a database that already exists is
+            // populated before the app comes back up rather than one launch later.
+            Credentials.seedAccount();
+
             report(activity, callback, true, "Connected.");
         } catch (Exception exception) {
             Log.e(TAG, "token exchange failed", exception);

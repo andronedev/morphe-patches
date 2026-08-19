@@ -31,92 +31,38 @@ Patch definitions for Transit and AdMobile.
 
 ## AdMobile
 
-AdMobile 2.4.8 shows AdMob native ads only. There is no banner, interstitial, rewarded or app open
-ad in the APK. Four placements exist (home, apps, app info, mediation) and they share one pipeline:
-the base fragment asks for an ad when the user is not pro, the fragment builds
-`AdLoader.Builder(context, getString(R.string.ad_*_native))`, and the loaded ad reaches
-`AdNativeView.setNativeAd(NativeAd)`, which binds it and makes the view visible.
-
-**Hide Ads** returns early from `setNativeAd`, after releasing the ad. **Disable Ad Requests**
-blanks the `ad_home_native`, `ad_apps_native` and `ad_app_info_native` string resources; an empty ad
-unit id makes the request fail instead of returning an ad. Use both: the first guarantees nothing is
-drawn, the second stops the network traffic.
-
-Both anchors survive obfuscation. `AdNativeView` is referenced from layout XML so R8 keeps the class
-name, `setNativeAd` is kept by the default ProGuard rule for `set*` on `View` subclasses, and
-resource names are never obfuscated.
-
-### Pro Unlock
-
-Pro is one boolean field on the app's store, written in exactly one place: the `verifyAppPurchase`
-body, which checks the persisted purchase json and signature against the stored Play public key.
-Everything else only reads it, and the check is entirely local, so nothing else has to be defeated.
-
-**Pro Unlock** forces both writes to that field to `true`: the one after a failed verification, and
-the one taken when no purchase is persisted at all. The second is what makes it work on a device
-that never bought anything. The method is found by the log prefix it emits, a string R8 leaves
-alone. **Pro Badge**, which comes with it, relabels the profile screen's premium button so the state
-is visible.
-
-Pro Unlock also suppresses the ads on its own, since the ad loader sits behind the same flag. The
-two ad patches stay useful as a narrower option.
+Hide Ads, Disable Ad Requests and Pro Unlock need no setup. Pro Unlock also hides the ads on its own,
+since the ad loader sits behind the same flag; the two ad patches are the narrower option. Pro Badge
+comes with Pro Unlock and relabels the profile screen's premium button.
 
 ### Signing in on a re-signed build
 
-A re-signed APK cannot use Google Sign-In. Google validates the calling package against the SHA-1
-the OAuth Android client was registered with and answers `DEVELOPER_ERROR` (10). This is not
-specific to these patches, and microG does not help: it reports the app's real certificate to the
-same endpoint. Installing in mount mode on a rooted device avoids it by keeping the original
-signature.
+A re-signed APK cannot use Google Sign-In: Google checks the calling package against the SHA-1 the
+OAuth client was registered with and answers `DEVELOPER_ERROR` (10). microG does not help.
 
-**Custom AdMob Credentials** removes the need for either. Google Sign-In only obtains the initial
-authorization code; everything after it is plain HTTPS that does not care how the APK is signed. The
-app exchanges and refreshes tokens itself against `oauth2.googleapis.com/token` and reads the
-reports from `admob.googleapis.com`. Supply your own OAuth client and the GMS step disappears.
+**Custom AdMob Credentials** replaces it with your own OAuth client. Everything past the
+authorization code is plain HTTPS that does not care how the APK is signed. You need:
 
-The client secret never ships in the APK: the app downloads it from the developer's Firestore after
-a successful Firebase sign-in. That is why injecting only a refresh token cannot work, and why the
-patch takes your own OAuth client instead.
+1. A Google Cloud project with the **AdMob API** and the **AdSense Management API** enabled. The
+   second one only fills the payments card; without it the rest still works.
+2. An OAuth consent screen (External, Testing) with your account as a test user.
+3. An OAuth client of type **Desktop**.
 
-Credentials are entered in the app. The launch screen's **Sign in** button opens the form instead of
-the Google flow, so setup is one tap from the screen a fresh install lands on. There is no second
-launcher icon and the app's navigation is untouched. Saving restarts the app. The values live in the
-app's private preferences, so a patched build carries no secret and one build works for anybody;
-until they are filled in, every hook falls through and the app behaves as it did before patching.
+Open AdMobile, tap **Sign in**, paste the client id and secret, save. The consent screen runs in the
+browser; publisher id, currency and time zone are read back automatically. Nothing is compiled into
+the APK, so one build works for anybody.
 
-#### What you need
+Limits: one account, no switcher. Refresh tokens from a Testing consent screen expire after 7 days.
 
-1. A Google Cloud project with the **AdMob API** enabled, and the **AdSense Management API**
-   alongside it. The reports come from the first, the payments card on the profile screen from the
-   second. Leaving the second one off is not fatal: everything else works, and the profile screen
-   shows Google's own "has not been used in project ... or it is disabled" error.
-2. An OAuth consent screen (External, Testing) with your own account added as a test user.
-3. An OAuth client of type **Desktop**, which gives you a client id and a client secret.
+### Without the Morphe toolchain
 
-Open AdMobile, tap **Sign in**, paste the two values into the form and save. The consent screen runs
-in the browser and the publisher id, currency and time zone are read back automatically.
+`tools/apply-admobile.py` makes the same edits on an apktool-decoded APK; its docstring gives the
+full sequence, including building and injecting the extension dex. Decode a **universal** APK:
+AdMobile ships as a split set and the base split alone installs as "app not compatible with this
+device".
 
-#### Without the Morphe toolchain
-
-`tools/apply-admobile.py` performs the same edits on an apktool-decoded APK. The extension has to
-be compiled and injected by hand; the script's docstring gives the full sequence. Its anchors are
-the obfuscated names of AdMobile 2.4.8, so it needs updating for later versions, whereas the patches
-find theirs through fingerprints.
-
-Decode a **universal** APK. AdMobile ships as a split set, and the base split alone carries a
-`res/xml/splits0.xml` and none of the density resources, which installs as "app not compatible with
-this device". Merge the set first (APKEditor and similar tools do this).
-
-`tools/check-admobile-api.py` replays the same API calls from a desktop, which tells you whether a
-problem is in the build or in the Google project.
-
-#### Limits
-
-- The patch fabricates the single selected account. The account switcher stays empty, and there is
-  no way to add a second account.
-- The Firebase session is never established, so anything backed by the developer's Firestore is
-  unavailable. Pro Unlock already covers the part of that which is gated on purchases.
-- Refresh tokens issued by a consent screen still in Testing expire after seven days.
+`tools/check-admobile-api.py` replays the API calls from a desktop, to tell a build problem from a
+Google project problem.
 
 ## Transit
 
@@ -126,7 +72,7 @@ with your own Google Maps Android key to restore them.
 ## Notes
 
 - The upstream Morphe Gradle plugin is private and may require credentials to run generation tasks.
-- `patches-list.json` and `patches-bundle.json` are maintained by hand to match the current state.
+- `patches-list.json` and `patches-bundle.json` are maintained by hand.
 
 ## Star History
 

@@ -47,6 +47,7 @@ public final class OAuthFlow {
     private static final String AUTH_ENDPOINT = "https://accounts.google.com/o/oauth2/v2/auth";
     private static final String TOKEN_ENDPOINT = "https://oauth2.googleapis.com/token";
     private static final String ACCOUNTS_ENDPOINT = "https://admob.googleapis.com/v1/accounts";
+    private static final String ADMOB_ACCOUNTS = ACCOUNTS_ENDPOINT;
 
     /** The scopes AdMobile itself requests. */
     private static final String SCOPES =
@@ -184,6 +185,69 @@ public final class OAuthFlow {
             // this screen with a working connection is enough to finish.
             report(activity, callback, false, "Sign in failed: " + exception.getMessage());
         }
+    }
+
+    /**
+     * Walks the same chain the app walks and reports what each step answered.
+     *
+     * <p>An empty dashboard is silent about its cause: the app logs nothing useful and stops at the
+     * first missing piece. This says which step fails and what Google said about it, which is the
+     * difference between a credential problem and a plumbing one.
+     */
+    public static void diagnose(Activity activity, Callback callback) {
+        new Thread(() -> {
+            StringBuilder report = new StringBuilder();
+
+            report.append("client: ").append(Credentials.hasClient() ? "set" : "MISSING").append('\n');
+            report.append("refresh token: ")
+                    .append(Credentials.get(Credentials.KEY_REFRESH_TOKEN).isEmpty() ? "MISSING" : "set")
+                    .append('\n');
+            report.append("access token: ")
+                    .append(Credentials.get(Credentials.KEY_ACCESS_TOKEN).isEmpty() ? "MISSING" : "set")
+                    .append('\n');
+            report.append("publisher: ")
+                    .append(Credentials.get(Credentials.KEY_PUBLISHER_ID).isEmpty()
+                            ? "MISSING" : Credentials.get(Credentials.KEY_PUBLISHER_ID))
+                    .append('\n');
+
+            try {
+                String refreshed = postForm(TOKEN_ENDPOINT,
+                        "client_id=" + encode(Credentials.effectiveClientId())
+                                + "&client_secret=" + encode(Credentials.effectiveClientSecret())
+                                + "&refresh_token=" + encode(Credentials.get(Credentials.KEY_REFRESH_TOKEN))
+                                + "&grant_type=refresh_token");
+
+                String accessToken = jsonString(refreshed, "access_token");
+                if (accessToken == null) {
+                    report.append("refresh: REFUSED ").append(trim(refreshed));
+                    finishDiagnosis(activity, callback, report);
+                    return;
+                }
+
+                Credentials.put(Credentials.KEY_ACCESS_TOKEN, accessToken);
+                report.append("refresh: ok\n");
+
+                String publisher = Credentials.get(Credentials.KEY_PUBLISHER_ID);
+                String apps = get(ADMOB_ACCOUNTS + "/" + publisher + "/apps", accessToken);
+                report.append("apps: ").append(apps == null ? "no response" : trim(apps)).append('\n');
+            } catch (Exception exception) {
+                report.append("network: ").append(exception).append('\n');
+            }
+
+            finishDiagnosis(activity, callback, report);
+        }).start();
+    }
+
+    private static void finishDiagnosis(Activity activity, Callback callback, StringBuilder report) {
+        String text = report.toString();
+        Log.i(TAG, "diagnosis:\n" + text);
+        Credentials.put(Credentials.KEY_LAST_STATUS, text);
+
+        activity.runOnUiThread(() -> callback.onFinished(false, text));
+    }
+
+    private static String trim(String body) {
+        return body.length() > 300 ? body.substring(0, 300) + "…" : body;
     }
 
     private static void clearPending() {

@@ -113,6 +113,20 @@ public final class CredentialsActivity extends Activity {
         });
         form.addView(manualToggle);
 
+        TextView diagnose = body("Run a connection check");
+        diagnose.setTextColor(primary);
+        diagnose.setGravity(Gravity.CENTER_HORIZONTAL);
+        diagnose.setPadding(0, dp(16), 0, 0);
+        diagnose.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                status.setText("Checking…");
+                status.setVisibility(View.VISIBLE);
+                OAuthFlow.diagnose(CredentialsActivity.this, signInCallback());
+            }
+        });
+        form.addView(diagnose);
+
         manualSection = buildManualSection();
         manualSection.setVisibility(bundledClient ? View.GONE : View.VISIBLE);
         form.addView(manualSection);

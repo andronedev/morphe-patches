@@ -38,3 +38,6 @@ google-services.json
 .tmp-test/
 .tmp-test.old*/
 .tmp*/
+
+# Sortie de tools/lbc-recon.py (contenu extrait de l APK, ne pas versionner)
+recon/

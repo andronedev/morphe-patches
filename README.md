@@ -1,6 +1,20 @@
-# Transit Patches
+# Morphe Patches
 
-This repository now contains only Transit patch definitions.
+Patch definitions for Transit, plus the in-progress **Morphe LBC** mod framework for leboncoin.
+
+## Work in progress: Morphe LBC (`fr.leboncoin`)
+
+An Aliucord-style mod framework: the APK is patched once with a minimal loader, and features
+(no-ads, better filters, auto-repost) ship as runtime plugins that can be updated without
+repatching.
+
+- Design, roadmap and known risks: [`docs/leboncoin/ARCHITECTURE.md`](docs/leboncoin/ARCHITECTURE.md)
+- Runtime (loaded at execution, separate Gradle build): `runtime/leboncoin/`
+- Injector patches: `patches/src/main/kotlin/app/morphe/patches/leboncoin/`
+- APK reconnaissance tool: `tools/lbc-recon.py` (`python3 tools/lbc-recon.py app.apk -o recon/`)
+
+These patches are marked `use = false` and are **not yet validated on a device** — the fingerprints
+still need to be resolved against a real APK.
 
 ## Included patches
 

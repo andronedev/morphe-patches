@@ -6,6 +6,7 @@ import app.morphe.patches.admobile.Constants.CHECK_USER_LOG_PREFIX
 import app.morphe.patches.admobile.Constants.CHECK_USER_REINSERT_LOG_PREFIX
 import app.morphe.patches.admobile.Constants.LAUNCH_FRAGMENT_CLASS_DESCRIPTOR
 import app.morphe.patches.admobile.Constants.PREFERENCES_KEY_CLASS_DESCRIPTOR
+import app.morphe.patches.admobile.Constants.SIGN_OUT_LOG_PREFIX
 import com.android.tools.smali.dexlib2.iface.ClassDef
 import com.android.tools.smali.dexlib2.iface.instruction.ReferenceInstruction
 import com.android.tools.smali.dexlib2.iface.reference.FieldReference
@@ -81,6 +82,17 @@ internal object CheckUserFingerprint : Fingerprint(
 internal object AppStoreConstructorFingerprint : Fingerprint(
     returnType = "V",
     custom = { method, classDef -> method.name == "<init>" && classDef.isAppStore() },
+)
+
+/**
+ * `AccountManager.signOut()`. The app forgets the account in its database, which is not where the
+ * patched app's account lives, so signing out has to reach the extension too or it comes straight
+ * back on the next check.
+ */
+internal object SignOutFingerprint : Fingerprint(
+    returnType = "Ljava/lang/Object;",
+    parameters = listOf("Lyh/c;"),
+    strings = listOf(SIGN_OUT_LOG_PREFIX),
 )
 
 /**

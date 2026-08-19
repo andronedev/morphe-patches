@@ -298,6 +298,11 @@ public final class CredentialsActivity extends Activity {
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
         startActivity(launch);
         finish();
+
+        // Clearing the task is not enough: the account, the pro flag and the view models all live
+        // in memory, so the app would carry the old session into the new screen. Ending the process
+        // makes the restart real, and Android brings the launch activity back in a fresh one.
+        Runtime.getRuntime().exit(0);
     }
 
     // Material 3 surfaces, painted from the theme the patch puts on this activity.

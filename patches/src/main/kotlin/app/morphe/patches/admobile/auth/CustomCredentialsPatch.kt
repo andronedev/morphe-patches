@@ -216,6 +216,14 @@ val customCredentialsPatch = bytecodePatch(
             throw PatchException("Could not redirect any sign-in intent call.")
         }
 
+        // 4b. The app's own sign out forgets the account in its database. The patched app's account
+        //     is served from the extension instead, so without this it reappears on the next check
+        //     and signing out looks like it does nothing.
+        SignOutFingerprint.method.addInstructions(
+            0,
+            "invoke-static { }, $CREDENTIALS_CLASS_DESCRIPTOR->signOut()V",
+        )
+
         // 5. checkUser() sends the app to the login screen when the user DAO reports no selected
         //    account, so that query hands back a fabricated one. The DAO carries no strings of its
         //    own and is identified by the call checkUser() makes just before logging the result.

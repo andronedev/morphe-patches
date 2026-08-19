@@ -31,6 +31,7 @@ USER_DAO = "se/j.smali"
 USER_ENTITY = "io/stark/admob/model/entity/User.smali"
 SIGN_IN_CLIENT = "Landroid/content/Intent;"
 APPLICATION = "io/stark/admob/App.smali"
+ACCOUNT_MANAGER = "af/m.smali"
 
 ANCHORS = {
     "datastore_read": ".method public final g(Ll1/d;Lyh/c;)Ljava/lang/Object;\n    .locals 7\n",
@@ -42,6 +43,19 @@ ANCHORS = {
     "legacy_write": ".method public final o(Ljava/lang/String;Ljava/lang/String;)V\n    .locals 1\n",
     "selected_user": ".method public final b(Lyh/c;)Ljava/lang/Object;\n    .locals 4\n",
     "on_create": ".method public final onCreate()V\n    .locals 7\n",
+    "sign_out": ".method public final j(Lyh/c;)Ljava/lang/Object;\n    .locals 12\n",
+}
+
+
+ANCHOR_FILES = {
+    "datastore_read": APP_STORE,
+    "legacy_read": APP_STORE,
+    "constructor": APP_STORE,
+    "datastore_write": APP_STORE,
+    "legacy_write": APP_STORE,
+    "selected_user": USER_DAO,
+    "on_create": APPLICATION,
+    "sign_out": ACCOUNT_MANAGER,
 }
 
 
@@ -125,6 +139,17 @@ def patch_writes(smali_dir):
         ANCHORS["legacy_write"],
         f"""
     invoke-static {{p1, p2}}, {EXTENSION}->observeWrite(Ljava/lang/String;Ljava/lang/String;)V
+""",
+    )
+
+
+def patch_sign_out(smali_dir):
+    """The app forgets the account in its database, which is not where the patched one lives."""
+    insert_after(
+        os.path.join(smali_dir, ACCOUNT_MANAGER),
+        ANCHORS["sign_out"],
+        f"""
+    invoke-static {{}}, {EXTENSION}->signOut()V
 """,
     )
 
@@ -319,9 +344,7 @@ def main():
         sys.exit("already patched; decode the APK again to start from a clean tree")
 
     for name, anchor in ANCHORS.items():
-        path = APPLICATION if name == "on_create" else (
-            USER_DAO if name == "selected_user" else APP_STORE
-        )
+        path = ANCHOR_FILES[name]
         with open(os.path.join(smali_dir, path)) as handle:
             if anchor not in handle.read():
                 sys.exit(f"anchor '{name}' not found in {path}")
@@ -330,13 +353,14 @@ def main():
     patch_datastore_read(smali_dir)
     patch_legacy_read(smali_dir)
     patch_writes(smali_dir)
+    patch_sign_out(smali_dir)
     patch_constructor(smali_dir)
     add_synthetic_user(smali_dir)
     patch_sign_in_intent(smali_dir)
     patch_selected_user_query(smali_dir)
     patch_manifest(decoded_dir)
 
-    print("applied 10 edits; now build, inject the extension dex, and sign")
+    print("applied 11 edits; now build, inject the extension dex, and sign")
 
 
 if __name__ == "__main__":

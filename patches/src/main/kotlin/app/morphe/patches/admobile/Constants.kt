@@ -74,6 +74,7 @@ internal object Constants {
     const val CHECK_USER_LOG_PREFIX = "checkUser: "
     const val CHECK_USER_REINSERT_LOG_PREFIX = "checkUser REINSERT: "
     const val ACCOUNT_MANAGER_LOG_TAG = "AccountManager"
+    const val SIGN_OUT_LOG_PREFIX = "signOut: userId: "
 
     /** Name given to the factory this patch adds to the user entity. */
     const val SYNTHETIC_USER_METHOD_NAME = "morpheSyntheticUser"
